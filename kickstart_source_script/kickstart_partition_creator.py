@@ -566,7 +566,7 @@ def write_kickstart_partitions_file(partitions_schema: dict) -> bool:
                     name = "root"
                 else:
                     name = part_properties["mountpoint"].replace("/", "")
-                kickstart += f'logvol {part_properties["mountpoint"]} --vgname {VG_NAME} --fstype {part_properties["fs"]} --name={name}{fsoptions}\n'
+                kickstart += f'logvol {part_properties["mountpoint"]} --vgname {VG_NAME} --fstype {part_properties["fs"]} --name={name}{fsoptions} --size={part_properties["size"]}\n'
             part_number += 1
     try:
         with open("/tmp/partitions", "w", encoding="utf-8") as fp:
