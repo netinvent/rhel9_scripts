@@ -544,7 +544,7 @@ def write_kickstart_partitions_file(partitions_schema: dict) -> bool:
             if part_properties["fs"] == "linux-swap":
                 part_properties["fs"] = "swap"
             try:
-                fsoptions = f' --fsptions={part_properties["fsoptions"]}'
+                fsoptions = f' --fsoptions={part_properties["fsoptions"]}'
             except KeyError:
                 # Don't bother if partition doesn't have fsoptions
                 fsoptions = ""
@@ -558,7 +558,7 @@ def write_kickstart_partitions_file(partitions_schema: dict) -> bool:
                 if part_properties["fs"] == "linux-swap":
                     part_properties["fs"] = "swap"
                 try:
-                    fsoptions = f' --fsptions={part_properties["fsoptions"]}'
+                    fsoptions = f' --fsoptions={part_properties["fsoptions"]}'
                 except KeyError:
                     # Don't bother if partition doesn't have fsoptions
                     fsoptions = ""
