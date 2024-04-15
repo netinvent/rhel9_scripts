@@ -2,7 +2,9 @@
 
 ### Kickstart file
 
-The kickstart file contains a python script which handles automagic partitioning and other small adjustemnts.
+The kickstart file contains a python script which handles automagic partitioning and other small adjustemnts.  
+It will handle MBR, GPT and LVM style partitionning, while being able to autosize partitions.  
+It can also optionally reserve 5% disk space on physical servers, which might come in handy for SSD usage.
 
 The python script is to be executed as `%pre --interpreter=/bin/python3` script and will create the following:
 

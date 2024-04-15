@@ -6,7 +6,7 @@ __intname__ = "kickstart.partition_script.RHEL9"
 __author__ = "Orsiris de Jong"
 __copyright__ = "Copyright (C) 2022-2024 Orsiris de Jong - NetInvent SASU"
 __licence__ = "BSD 3-Clause"
-__build__ = "2024030501"
+__build__ = "2024041501"
 
 ### This is a pre-script for kickstart files in RHEL 9
 ### Allows specific partition schemes with one or more data partitions
@@ -15,11 +15,23 @@ __build__ = "2024030501"
 
 
 ## Possible partitionning targets
-# hv: Standard KVM hypervisor
-# hv-stateless: Stateless KVM hypervisor
 # generic: One big root partition
 # anssi: ANSSI-BP028 high profile compatible partitioning scheme
+# hv: Standard KVM hypervisor
+# hv-stateless: Stateless KVM hypervisor*
+# stateless: Generic machine with a 50% sized partition for statefulness (readonly-ro)
 TARGET = "anssi"
+
+# Reserve 5% of disk space on physical machines, useful for SSD disks
+# Set to 0 to disable
+REDUCE_PHYSICAL_DISK_SPACE = 5
+
+# Enable LVM partitioning
+LVM_ENABLED = True
+# LVM volume group name
+VG_NAME = "vg00"
+# LVM Physical extent size
+PE_SIZE = 4096
 
 ## Password management
 # If ARE_PASSWORDS_CRYPTED, root and user passwords need to be generated using openssl passwd -6 (or -5)
@@ -46,6 +58,7 @@ REMOVE_VIRTUAL_PACKAGES=True
 
 import sys
 import os
+from typing import Tuple
 import subprocess
 import logging
 from time import sleep
@@ -62,13 +75,13 @@ from time import sleep
 # Partition schema for standard KVM Hypervisor
 PARTS_HV = [
     {"size": 30720, "fs": "xfs", "mountpoint": "/"},
-    {"size": True, "fs": "xfs", "mountpoint": "/var/lib/libvirt/images"},
+    {"size": True, "fs": "xfs", "mountpoint": "/var/lib/libvirt/images", "fsoptions": "nodev,nosuid,noexec"},
 ]
 
 # Partition schema for stateless KVM Hypervisor
 PARTS_HV_STATELESS = [
     {"size": 30720, "fs": "xfs", "mountpoint": "/"},
-    {"size": True, "fs": "xfs", "mountpoint": "/var/lib/libvirt/images"},
+    {"size": True, "fs": "xfs", "mountpoint": "/var/lib/libvirt/images", "fsoptions": "nodev,nosuid,noexec"},
     {"size": 30720, "fs": "xfs", "mountpoint": None, "label": "STATEFULRW"},
 ]
 
@@ -84,19 +97,23 @@ PARTS_GENERIC = [
 ]
 
 # Example partition schema for ANSSI-BP028 high profile
+# This example requires at least 65GB of disk space
+# as it will also require swap space depeding on memory size, /boot and /boot/efi space
 PARTS_ANSSI = [
-    {"size": 30720, "fs": "xfs", "mountpoint": "/"},
-    {"size": 40960, "fs": "xfs", "mountpoint": "/home"},
-    #{"size": 40960 , "fs": "xfs", "mountpoint": "/srv"},                # When FTP/SFTP server is used
-    {"size": 10240, "fs": "xfs", "mountpoint": "/tmp"},
-    {"size": True, "fs": "xfs", "mountpoint": "/var"},
-    {"size": 30720, "fs": "xfs", "mountpoint": "/var/log"},
-    {"size": 10240, "fs": "xfs", "mountpoint": "/var/log/audit"},
-    {"size": 10240, "fs": "xfs", "mountpoint": "/var/tmp"},
+    {"size": 5120, "fs": "xfs", "mountpoint": "/"},
+    {"size": 5120, "fs": "xfs", "mountpoint": "/usr", "fsoptions": "nodev"},
+    {"size": 1024, "fs": "xfs", "mountpoint": "/opt", "fsoptions": "nodev,nosuid"},
+    {"size": 10240, "fs": "xfs", "mountpoint": "/home", "fsoptions": "nodev"},
+    #{"size": 40960 , "fs": "xfs", "mountpoint": "/srv", "fsoptions": "nodev,nosuid"},        # When FTP/SFTP server is used
+    {"size": 5120, "fs": "xfs", "mountpoint": "/tmp", "fsoptions": "nodev,nosuid,noexec"},
+    {"size": True, "fs": "xfs", "mountpoint": "/var", "fsoptions": "nodev"},
+    {"size": 5120, "fs": "xfs", "mountpoint": "/var/tmp", "fsoptions": "nodev,nosuid,noexec"},
+    {"size": 10240, "fs": "xfs", "mountpoint": "/var/log", "fsoptions": "nodev,nosuid,noexec"},
+    {"size": 2048, "fs": "xfs", "mountpoint": "/var/log/audit", "fsoptions": "nodev,nosuid,noexec"},
 ]
 
 
-def dirty_cmd_runner(cmd: str) -> [int, str]:
+def dirty_cmd_runner(cmd: str) -> Tuple[int, str]:
     """
     QaD command runner
     """
@@ -109,6 +126,8 @@ def dirty_cmd_runner(cmd: str) -> [int, str]:
 
 
 def is_gpt_system() -> bool:
+    if DEV_MOCK:
+        return True
     is_gpt = os.path.exists("/sys/firmware/efi")
     if is_gpt:
         logger.info("We're running on a UEFI machine")
@@ -122,6 +141,8 @@ def get_mem_size() -> int:
     Returns memory size in MB
     Balantly copied from https://stackoverflow.com/a/28161352/2635443
     """
+    if DEV_MOCK:
+        return 16384
     mem_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf(
         "SC_PHYS_PAGES"
     )  # e.g. 4015976448
@@ -137,6 +158,8 @@ def get_first_disk_path() -> list:
     First, let's get the all the available disk names (ex hda,sda,vda)
     We might have a /dev/zram0 device which is considered as disk, so we need to filter vdX,sdX,hdX
     """
+    if DEV_MOCK:
+        return "/dev/vdx"
     cmd = r"lsblk -nd --output NAME,TYPE | grep -i disk | grep -e '^v\|^s\|^h' | cut -f1 -d' '"
     result, output = dirty_cmd_runner(cmd)
     if result:
@@ -156,7 +179,7 @@ def zero_disk(disk_path: str) -> bool:
     """
     cmd = f"dd if=/dev/zero of={disk_path} bs=512 count=1 conv=notrunc && blockdev --rereadpt {disk_path}"
     logger.info(f"Zeroing disk {disk_path}")
-    if DRY_RUN:
+    if DEV_MOCK:
         return True
     result, output = dirty_cmd_runner(cmd)
     if not result:
@@ -174,7 +197,7 @@ def init_disk(disk_path: str) -> bool:
         label = "msdos"
     cmd = f"parted -s {disk_path} mklabel {label}"
     logger.info(f"Making {disk_path} label")
-    if DRY_RUN:
+    if DEV_MOCK:
         return True
     result, output = dirty_cmd_runner(cmd)
     if not result:
@@ -187,6 +210,8 @@ def get_disk_size_mb(disk_path: str) -> int:
     Get disk size in megabytes
     Use parted so we don't rely on other libs
     """
+    if DEV_MOCK:
+        return 61140 # 60GB
     cmd = f"parted -s {disk_path} unit mb print | grep {disk_path} | awk '{{ print $3 }}' | cut -d'M' -f1"
     logger.info(f"Getting {disk_path} size")
     result, output = dirty_cmd_runner(cmd)
@@ -206,12 +231,16 @@ def get_disk_size_mb(disk_path: str) -> int:
 def get_allocated_space(partitions_schema: dict) -> int:
     # Let's fill ROOT part with anything we can
     allocated_space = 0
-    for partition in partitions_schema:
-        allocated_space += partitions_schema[partition]["size"]
+    for key, value in partitions_schema.items():
+        if key == "lvm":
+            for lvm_value in value.values():
+                allocated_space += lvm_value["size"]
+            continue
+        allocated_space += partitions_schema[key]["size"]
     return allocated_space
 
 
-def get_partition_schema():
+def get_partition_schema() -> dict:
     global PARTS
 
     mem_size = get_mem_size()
@@ -223,35 +252,52 @@ def get_partition_schema():
     def create_partition_schema():
         if IS_GPT:
             partitions_schema = {
-                0: {"size": 600, "fs": "fat32", "mountpoint": "/boot/efi"},
-                1: {"size": 1024, "fs": "xfs", "mountpoint": "/boot"},
+                "0": {"size": 600, "fs": "fat32", "mountpoint": "/boot/efi"},
+                "1": {"size": 1024, "fs": "xfs", "mountpoint": "/boot"},
             }
         else:
-            partitions_schema = {0: {"size": 1024, "fs": "xfs", "mountpoint": "/boot"}}
+            partitions_schema = {"0": {"size": 1024, "fs": "xfs", "mountpoint": "/boot"}}
 
-        partitions_schema[99] = {"size": swap_size, "fs": "linux-swap", "mountpoint": "swap"}
-        return partitions_schema
+        if LVM_ENABLED:
+            partitions_schema["lvm"] = {
+                "99": {"size": swap_size, "fs": "linux-swap", "mountpoint": "swap"}
+            }
+        else:
+            partitions_schema["99"] = {"size": swap_size, "fs": "linux-swap", "mountpoint": "swap"}
+        return partitions_schema 
 
     def add_fixed_size_partitions(partitions_schema):
+        """
+        Add fixed size partitions to partition schema
+        """
         for index, partition in enumerate(PARTS):
             # Shift index so we don't overwrite boot partition indexes
-            index = index + 10
+            index = str(int(index) + 10)
             if not isinstance(partition["size"], bool) and isinstance(
                 partition["size"], int
             ):
-                partitions_schema[index] = {"size": partition["size"]}
+                if LVM_ENABLED:
+                    partitions_schema["lvm"][index] = {"size": partition["size"]}
+                else:
+                    partitions_schema[index] = {"size": partition["size"]}
         return partitions_schema
 
     def add_percent_size_partitions(partitions_schema):
+        """
+        Add percentage size partitions to partition schema
+        """
         total_percentage = 0
         free_space = USABLE_DISK_SPACE - get_allocated_space(partitions_schema)
         for index, partition in enumerate(PARTS):
-            index = index + 10
+            index = str(int(index) + 10)
             if isinstance(partition["size"], str) and partition["size"][-1] == "%":
                 percentage = int(partition["size"][:-1])
                 total_percentage += percentage
                 size = int(free_space * percentage / 100)
-                partitions_schema[index] = {"size": size}
+                if LVM_ENABLED:
+                    partitions_schema["lvm"][index] = {"size": size}
+                else:
+                    partitions_schema[index] = {"size": size}
         if total_percentage > 100:
             msg = f"Percentages add up to more than 100%: {total_percentage}"
             logger.error(msg)
@@ -259,31 +305,38 @@ def get_partition_schema():
         return partitions_schema
 
     def get_number_of_filler_parts():
+        """
+        Determine the number of partitions that will fill the remaining space
+        """
         filler_parts = 0
-        for index, partition in enumerate(PARTS):
-            index = index + 10
+        for partition in PARTS:
             if isinstance(partition["size"], bool):
                 filler_parts += 1
         return filler_parts
 
     def populate_partition_schema_with_other_data(partitions_schema):
-        # Now let's properly populate partition schema with other data
+        """
+        Populate partition schema with FS and mountpoints
+        """
         for index, partition in enumerate(PARTS):
-            index = index + 10
+            index = str(int(index + 10))
             for key, value in partition.items():
                 if key == "size":
                     continue
                 try:
-                    partitions_schema[index][key] = value
+                    if LVM_ENABLED:
+                        partitions_schema["lvm"][index][key] = value
+                    else:
+                        partitions_schema[index][key] = value
                 except KeyError:
                     pass
         return partitions_schema
 
     ## FN ENTRY POINT
     # When using MBR and more than 3 
-    if len(PARTS) >= 3 and not IS_GPT:
+    if len(PARTS) >= 3 and not IS_GPT and not LVM_ENABLED:
         logger.error(
-            "We cannot create more than 4 parts in MBR mode (boot + swap + two other partitions)...Didn't bother to code that path for prehistoric systems."
+            "We cannot create more than 4 parts in MBR mode (boot + swap + two other partitions)...Didn't bother to code that path for prehistoric systems. Consider enabling LVM"
         )
         sys.exit(1)
 
@@ -295,6 +348,7 @@ def get_partition_schema():
     partitions_schema = add_percent_size_partitions(partitions_schema)
 
     filler_parts = get_number_of_filler_parts()
+    logger.info(f"Number of filler partitions: {filler_parts}")
     # Depending on how many partitions fill the remaining space, convert filler partitions to percentages
     if filler_parts > 1:
         for index, partition in enumerate(PARTS):
@@ -308,20 +362,40 @@ def get_partition_schema():
     else:
         # Else just fill remaining partition with all space
         free_space = USABLE_DISK_SPACE - get_allocated_space(partitions_schema)
+        if free_space < 0:
+            logger.error("Cannot fill remaining space with partitions. Not enough space left. Is your partition schema valid ?")
+            logger.error(f"Usable disk space: {USABLE_DISK_SPACE}, Allocated space: {get_allocated_space(partitions_schema)}")
+            return
         for index, partition in enumerate(PARTS):
-            index = index + 10
+            index = str(int(index + 10))
             if isinstance(partition["size"], bool):
-                partitions_schema[index] = {"size": free_space}
+                if LVM_ENABLED:
+                    partitions_schema["lvm"][index] = {"size": free_space}
+                else:
+                    partitions_schema[index] = {"size": free_space}
     partitions_schema = populate_partition_schema_with_other_data(partitions_schema)
 
     # Sort partition schema
     partitions_schema = dict(sorted(partitions_schema.items()))
+    if LVM_ENABLED:
+        partitions_schema["lvm"] = dict(sorted(partitions_schema["lvm"].items()))
     return partitions_schema
 
 
-def validate_partition_schema(partitions: dict):
+def validate_partition_schema(partitions: dict) -> bool:
+    """
+    Check if our partition schema doesn't exceeed disk size
+
+    TODO: Add LVM check
+    """
     total_size = 0
     for partition in partitions.keys():
+        if partition == "lvm":
+            for key, value in partitions["lvm"].keys():
+                if key == "size":
+                    total_size += value
+                msg = f"PART {partition}: {partitions[partition]}"
+            continue
         for key, value in partitions[partition].items():
             if key == "size":
                 total_size += value
@@ -336,64 +410,93 @@ def validate_partition_schema(partitions: dict):
     return True
 
 
-def prepare_non_kickstart_partitions(partitions_schema: dict):
+def prepare_non_kickstart_partitions(partitions_schema: dict) -> bool:
     """
     When partitions don't have a mountpoint, we'll have to create the FS ourselves
     If partition has a xfs label, let's create it
     """
     part_number = 1
-    for part_properties in partitions_schema.values():
-        if part_properties["mountpoint"] is None:
-            logger.info(
-                f"Partition {DISK_PATH}{part_number} has no mountpoint and won't be handled by kickstart. Going to create it FS {part_properties['fs']}"
-            )
-            cmd = f'mkfs.{part_properties["fs"]} -f {DISK_PATH}{part_number}'
-            if DRY_RUN:
-                result = True, "Dry run"
-            else:
-                result, output = dirty_cmd_runner(cmd)
-            if not result:
-                logger.error(f"Command {cmd} failed: {output}")
-                return False
+    for part_index, part_properties in partitions_schema.items():
+        if part_index == "lvm":
+            pass # TODO
+        else:
+            if part_properties["mountpoint"] is None:
+                logger.info(
+                    f"Partition {DISK_PATH}{part_number} has no mountpoint and won't be handled by kickstart. Going to create it FS {part_properties['fs']}"
+                )
+                cmd = f'mkfs.{part_properties["fs"]} -f {DISK_PATH}{part_number}'
+                if DEV_MOCK:
+                    result = True
+                else:
+                    result, output = dirty_cmd_runner(cmd)
+                if not result:
+                    logger.error(f"Command {cmd} failed: {output}")
+                    return False
 
-        if "label" in part_properties.keys():
-            if part_properties["fs"] == "xfs":
-                cmd = (
-                    f'xfs_admin -L {part_properties["label"]} {DISK_PATH}{part_number}'
+            if "label" in part_properties.keys():
+                if part_properties["fs"] == "xfs":
+                    cmd = (
+                        f'xfs_admin -L {part_properties["label"]} {DISK_PATH}{part_number}'
+                    )
+                elif part_properties["fs"].lower()[:3] == "ext":
+                    cmd = f'tune2fs -L {part_properties["label"]} {DISK_PATH}{part_number}'
+                else:
+                    logger.error(
+                        f'Setting label on FS {part_properties["fs"]} is not implemented'
+                    )
+                    return False
+                logger.info(
+                    f'Setting up partition {DISK_PATH}{part_number} FS {part_properties["fs"]} with label {part_properties["label"]}'
                 )
-            elif part_properties["fs"].lower()[:3] == "ext":
-                cmd = f'tune2fs -L {part_properties["label"]} {DISK_PATH}{part_number}'
-            else:
-                logger.error(
-                    f'Setting label on FS {part_properties["fs"]} is not implemented'
-                )
-                return False
-            logger.info(
-                f'Setting up partition {DISK_PATH}{part_number} FS {part_properties["fs"]} with label {part_properties["label"]}'
-            )
-            if DRY_RUN:
-                result = True, "Dry run"
-            else:
-                result, output = dirty_cmd_runner(cmd)
-            if not result:
-                logger.error(f"Command {cmd} failed: {output}")
-                return False
+                if DEV_MOCK:
+                    result = True
+                else:
+                    result, output = dirty_cmd_runner(cmd)
+                if not result:
+                    logger.error(f"Command {cmd} failed: {output}")
+                    return False
             
         part_number += 1
     return True
 
 
-def write_kickstart_partitions_file(partitions_schema: dict):
+def write_kickstart_partitions_file(partitions_schema: dict) -> bool:
     part_number = 1
     kickstart = ""
-    for part_properties in partitions_schema.values():
+    for key, part_properties in partitions_schema.items():
+        if key == "lvm":
+            kickstart += 'part PVGroup --grow --size=1\n'
+            kickstart += f'volgroup {VG_NAME} --pesize={PE_SIZE} PVGroup\n'
+            continue
         if part_properties["mountpoint"]:
             # parted wants "linux-swap" whereas kickstart needs "swap" as fstype
             if part_properties["fs"] == "linux-swap":
                 part_properties["fs"] = "swap"
-            kickstart += f'part {part_properties["mountpoint"]} --fstype {part_properties["fs"]} --onpart={DISK_PATH}{part_number}\n'
+            try:
+                fsoptions = f' --fsptions={part_properties["fsoptions"]}'
+            except KeyError:
+                # Don't bother if partition doesn't have fsoptions
+                fsoptions = ""
+            kickstart += f'part {part_properties["mountpoint"]} --fstype {part_properties["fs"]} --onpart={DISK_PATH}{part_number}{fsoptions}\n'
         part_number += 1
 
+    if LVM_ENABLED:
+        for part_properties in partitions_schema["lvm"].values():
+            if part_properties["mountpoint"]:
+                # parted wants "linux-swap" whereas kickstart needs "swap" as fstype
+                if part_properties["fs"] == "linux-swap":
+                    part_properties["fs"] = "swap"
+                try:
+                    fsoptions = f' --fsptions={part_properties["fsoptions"]}'
+                except KeyError:
+                    # Don't bother if partition doesn't have fsoptions
+                    fsoptions = ""
+                if part_properties["mountpoint"] == "/":
+                    name = "root"
+                else:
+                    name = part_properties["mountpoint"].replace("/", "")
+                kickstart += f'logvol {part_properties["mountpoint"]} --vgname {VG_NAME} --fstype {part_properties["fs"]} --name={name}{fsoptions}\n'
+            part_number += 1
     try:
         with open("/tmp/partitions", "w", encoding="utf-8") as fp:
             fp.write(kickstart)
@@ -403,22 +506,25 @@ def write_kickstart_partitions_file(partitions_schema: dict):
     return True
 
 
-def execute_parted_commands(partitions_schema: dict):
+def execute_parted_commands(partitions_schema: dict) -> bool:
     parted_commands = []
     partition_start = 0
-    for part_properties in partitions_schema.values():
-        if partition_start == 0:
-            partition_start = "1024KiB"
-            partition_end = 1 + part_properties["size"]
+    for part_index, part_properties in partitions_schema.items():
+        if part_index == "lvm":
+            pass # TODO
         else:
-            partition_start = partition_end
-            partition_end = partition_start + part_properties["size"]
-        parted_commands.append(
-            f'parted -a optimal -s {DISK_PATH} mkpart primary {part_properties["fs"]} {partition_start} {partition_end}'
-        )
+            if partition_start == 0:
+                partition_start = "1024KiB"
+                partition_end = 1 + part_properties["size"]
+            else:
+                partition_start = partition_end
+                partition_end = partition_start + part_properties["size"]
+            parted_commands.append(
+                f'parted -a optimal -s {DISK_PATH} mkpart primary {part_properties["fs"]} {partition_start} {partition_end}'
+            )
     for parted_command in parted_commands:
-        if DRY_RUN:
-            result = True, "Dry run"
+        if DEV_MOCK:
+            result = True
         else:
             result, output = dirty_cmd_runner(parted_command)
         if not result:
@@ -429,7 +535,7 @@ def execute_parted_commands(partitions_schema: dict):
     return True
 
 
-def setup_package_lists():
+def setup_package_lists() -> bool:
     logger.info("Setting up package ignore lists")
     package_ignore_virt_list = [
         'linux-firmware',
@@ -461,7 +567,7 @@ def setup_package_lists():
         return False
 
 
-def setup_hostname():
+def setup_hostname() -> bool:
     logger.info("Setting up hostname")
     if IS_VIRTUAL:
         hostname=VIRTUAL_HOSTNAME
@@ -477,7 +583,7 @@ def setup_hostname():
         return False
     
 
-def setup_users():
+def setup_users() -> bool:
     """
     Root password non encrypted version
     rootpw MyNonEncryptedPassword
@@ -506,7 +612,7 @@ def setup_users():
 
 
 # Script entry point
-DRY_RUN = False  # For dev
+DEV_MOCK = True
 
 logging.basicConfig(
     level=logging.INFO,
@@ -514,6 +620,9 @@ logging.basicConfig(
     handlers=[logging.FileHandler("/tmp/prescript.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger()
+
+if DEV_MOCK:
+    logger.info("Running in DEV_MOCK mode. Nothing will be executed or actually done here.")
 
 TARGET = TARGET.lower()
 if TARGET == "hw":
@@ -546,13 +655,12 @@ disk_space_mb = get_disk_size_mb(DISK_PATH)
 if not disk_space_mb:
     sys.exit(3)
 USABLE_DISK_SPACE = disk_space_mb - 2  # keep 1KB empty at beginning and 1MB at end
-if not IS_VIRTUAL:
+if not IS_VIRTUAL and REDUCE_PHYSICAL_DISK_SPACE:
     # Let's reserve 5% of disk space on physical machine
-    MAX_USABLE = 0.95
     REAL_USABLE_DISK_SPACE = USABLE_DISK_SPACE
-    USABLE_DISK_SPACE = int(USABLE_DISK_SPACE * 0.95)
+    USABLE_DISK_SPACE = int(USABLE_DISK_SPACE * (100 - REDUCE_PHYSICAL_DISK_SPACE)/100)
     logger.info(
-        f"Reducing usable disk space by {MAX_USABLE * 100} from {REAL_USABLE_DISK_SPACE} to {USABLE_DISK_SPACE}"
+        f"Reducing usable disk space by {REDUCE_PHYSICAL_DISK_SPACE}% from {REAL_USABLE_DISK_SPACE} to {USABLE_DISK_SPACE} since we deal with physical disks"
     )
 
 partitions_schema = get_partition_schema()
