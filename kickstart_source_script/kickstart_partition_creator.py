@@ -151,6 +151,8 @@ def get_first_disk_path() -> list:
 def zero_disk(disk_path: str) -> bool:
     """
     Zero first disk bytes
+    We need this instead of "cleanpart" directive since we're partitionning manually
+    in order to have a custom partition schema
     """
     cmd = f"dd if=/dev/zero of={disk_path} bs=512 count=1 conv=notrunc && blockdev --rereadpt {disk_path}"
     logger.info(f"Zeroing disk {disk_path}")
@@ -278,9 +280,10 @@ def get_partition_schema():
         return partitions_schema
 
     ## FN ENTRY POINT
+    # When using MBR and more than 3 
     if len(PARTS) >= 3 and not IS_GPT:
         logger.error(
-            "We cannot create a two data parts in MBR mode... Didn't bother to code that path for prehistoric systems"
+            "We cannot create more than 4 parts in MBR mode (boot + swap + two other partitions)...Didn't bother to code that path for prehistoric systems."
         )
         sys.exit(1)
 
