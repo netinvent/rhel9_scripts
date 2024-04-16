@@ -303,6 +303,7 @@ def get_partition_schema() -> dict:
     global PARTS
 
     mem_size = get_mem_size()
+    # Swap size will be at least 1446MB since RHEL9 will require at least 3GB (minus crash kernel) to install
     if mem_size > 16384:
         swap_size = mem_size
     else:
@@ -538,8 +539,8 @@ def write_kickstart_partitions_file(partitions_schema: dict) -> bool:
     kickstart = ""
     for key, part_properties in partitions_schema.items():
         if key == "lvm":
-            kickstart += f"part pvgroup --fstype lvmpv --grow --size=1 --onpart={DISK_PATH}{part_number}\n"
-            kickstart += f"volgroup {VG_NAME} --pesize={PE_SIZE} pvgroup\n"
+            kickstart += f"part pv.0 --fstype lvmpv --grow --size=1\n"
+            kickstart += f"volgroup {VG_NAME} pv.0 --pesize={PE_SIZE}\n"
             part_number += 1
             continue
         if part_properties["mountpoint"]:
@@ -596,12 +597,8 @@ def execute_parted_commands(partitions_schema: dict) -> bool:
             partition_end = 1 + part_properties["size"]
     
         elif part_index == "lvm":
-            # Let's assume that partition_end is already calulated since LVM is never the first partition
-            partition_start = partition_end
-            parted_commands.append(
-                f"parted -a optimal -s {DISK_PATH} mkpart primary {partition_start} {USABLE_DISK_SPACE}"
-            )
             # Assume we only have one big lvm partition, don't bother with others
+            # Also, we don't need to create it via parted, since this is automagically done by anaconda
             continue
 
         else:  # Non LVM partitions handling
