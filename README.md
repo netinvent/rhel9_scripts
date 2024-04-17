@@ -2,17 +2,19 @@
 
 ### Kickstart file
 
-The kickstart file contains a python script which handles automagic partitioning and other small adjustemnts.
+The kickstart file contains a python script which handles automagic partitioning and other small adjustemnts.  
+It will handle MBR, GPT and LVM style partitioning, while being able to autosize partitions.  
 
 The python script is to be executed as `%pre --interpreter=/bin/python3` script and will create the following:
 
 Automatic setup of machines with
 
 - Dynamic partition schema depending on selected target:
-  - `hv-stateless`: Hypervisor layout with 30GB root partition and `/var/lib/livirt/images` maximum partition size
-  - `hv-stateless`: The same as above but with a 30GB Stateful partition with label `STATEFULRW`
-  - `stateless`: A 50% size root partition and 50% size stateless partition with label `STATEFULRW`
+  - `hv`: Hypervisor layout with 30GB root partition and `/var/lib/livirt/images` maximum partition size
+  - `hv-stateless`: The same as above but with a 30GB size partition with label `STATEFULRW` for stateful storage
+  - `stateless`: A 50% size root partition and 50% size partition with label `STATEFULRW` for stateful storage
   - `generic`: A 100% size root partition
+  - `web`: A secure web server (subset of ANSSI BP-028-High)
   - `anssi`: ANSSI BP-028-High compatible partition schema
 
 Of course, you can adjust those values or create new partition schemas directly in the python script.
@@ -32,6 +34,19 @@ Of course, you can adjust those values or create new partition schemas directly 
     - ANSSI-BP028-High SCAP Profile configuration with report
     - Prometheus Node exporter installation
 - Cleanup of image after setup
+
+### Technical notes about this script
+
+Instead of relying on anaconda for partitioning, the script will handle partitioning via parted to allow usage of non mounted partitions for readonly-root setups with stateful partitions which should not be mounted via fstab.
+
+The script can also optionally reserve 5% disk space at the end of physical disk, in order to have some reserved space left for SSD drives.
+
+### Restrictions
+
+Using LVM partitioning is incompatible with stateless partitioning since the latter requires partitions without mountpoints.  
+As of today, the python script only uses a single disk. Multi disk support can be added on request.
+
+## Other scripts
 
 ### Setup Hypervisor
 
