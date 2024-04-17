@@ -6,7 +6,7 @@ __intname__ = "kickstart.partition_script.RHEL9"
 __author__ = "Orsiris de Jong"
 __copyright__ = "Copyright (C) 2022-2024 Orsiris de Jong - NetInvent SASU"
 __licence__ = "BSD 3-Clause"
-__build__ = "2024041502"
+__build__ = "2024041701"
 
 ### This is a pre-script for kickstart files in RHEL 9
 ### Allows specific partition schemes with one or more data partitions
@@ -69,7 +69,7 @@ from time import sleep
 ### Set Partition schema here
 # boot and swap partitions are automatically created
 # Sizes can be
-# - <nn>: Size in MB
+# - <nn>: Size in MiB (eg IEC bytes, where 1MiB = 1024KiB = 1048576 bytes)
 # - <nn%>: Percentage of remaining size after fixed size has been allocated
 # - True: Fill up remaining space after fixed and percentage size has been allocated
 #         If multiple True values exist, we'll divide by percentages of remaining space
@@ -106,7 +106,7 @@ PARTS_STATELSSS = [
 # Partition schema for generic machines with only one big root partition
 PARTS_GENERIC = [{"size": True, "fs": "xfs", "mountpoint": "/"}]
 
-# Partition schema for generic web servers (sized for minimum 20GB web servers)
+# Partition schema for generic web servers (sized for minimum 20GiB web servers)
 PARTS_WEB = [
     {"size": 5120, "fs": "xfs", "mountpoint": "/"},
     {
@@ -136,7 +136,7 @@ PARTS_WEB = [
 ]
 
 # Example partition schema for ANSSI-BP028 high profile
-# This example requires at least 65GB of disk space
+# This example requires at least 65GiB of disk space
 # as it will also require swap space depeding on memory size, /boot and /boot/efi space
 PARTS_ANSSI = [
     {"size": 5120, "fs": "xfs", "mountpoint": "/"},
@@ -197,7 +197,7 @@ def is_gpt_system() -> bool:
 
 def get_mem_size() -> int:
     """
-    Returns memory size in MB
+    Returns memory size in MiB
     Balantly copied from https://stackoverflow.com/a/28161352/2635443
     """
     if DEV_MOCK:
@@ -206,7 +206,7 @@ def get_mem_size() -> int:
         "SC_PHYS_PAGES"
     )  # e.g. 4015976448
     mem_mib = int(mem_bytes / (1024.0**2))  # e.g. 16384
-    logger.info(f"Current system has {mem_mib} MB of memory")
+    logger.info(f"Current system has {mem_mib} MiB of memory")
     return mem_mib
 
 
@@ -270,14 +270,14 @@ def get_disk_size_mb(disk_path: str) -> int:
     Use parted so we don't rely on other libs
     """
     if DEV_MOCK:
-        return 61140  # 60GB
-    cmd = f"parted -s {disk_path} unit mb print | grep {disk_path} | awk '{{ print $3 }}' | cut -d'M' -f1"
+        return 61140  # 60GiB
+    cmd = f"parted -s {disk_path} unit mib print | grep {disk_path} | awk '{{ print $3 }}' | cut -d'M' -f1"
     logger.info(f"Getting {disk_path} size")
     result, output = dirty_cmd_runner(cmd)
     if result:
         try:
             disk_size = int(output)
-            logger.info(f"Disk {disk_path} size is {disk_size} MB")
+            logger.info(f"Disk {disk_path} size is {disk_size} MiB")
             return disk_size
         except Exception as exc:
             logger.error(f"Cannot get {disk_path} size: {exc}. Result was {output}")
@@ -303,7 +303,7 @@ def get_partition_schema() -> dict:
     global PARTS
 
     mem_size = get_mem_size()
-    # Swap size will be at least 1446MB since RHEL9 will require at least 3GB (minus crash kernel) to install
+    # Swap size will be at least 1446MiB since RHEL9 will require at least 3GiB (minus crash kernel) to install
     if mem_size > 16384:
         swap_size = mem_size
     else:
@@ -745,7 +745,7 @@ if not init_disk(DISK_PATH):
 disk_space_mb = get_disk_size_mb(DISK_PATH)
 if not disk_space_mb:
     sys.exit(3)
-USABLE_DISK_SPACE = disk_space_mb - 2  # keep 1KB empty at beginning and 1MB at end
+USABLE_DISK_SPACE = disk_space_mb - 2  # keep 1KiB empty at beginning and 1MiB at end
 if not IS_VIRTUAL and REDUCE_PHYSICAL_DISK_SPACE:
     # Let's reserve 5% of disk space on physical machine
     REAL_USABLE_DISK_SPACE = USABLE_DISK_SPACE
