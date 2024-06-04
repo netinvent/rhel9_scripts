@@ -22,7 +22,7 @@ Of course, you can adjust those values or create new partition schemas directly 
 - Optional packages if physical machine
     - pre-configured smartmontools daemon
     - Optional IT8613 support
-    - Intel TCO Watchguard support
+    - Intel TCO Watchdog support
     - Tuned config profiles npf-eco and npf-perf
 - Optional setups on virtual machines
     - Exclusion of firmware packages
@@ -40,6 +40,8 @@ Of course, you can adjust those values or create new partition schemas directly 
 Instead of relying on anaconda for partitioning, the script will handle partitioning via parted to allow usage of non mounted partitions for readonly-root setups with stateful partitions which should not be mounted via fstab.
 
 The script can also optionally reserve 5% disk space at the end of physical disk, in order to have some reserved space left for SSD drives.
+
+If the installation fails for some reason, the logs will be found in `/tmp/prescript.log`
 
 ### Restrictions
 
