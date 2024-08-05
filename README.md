@@ -46,6 +46,11 @@ The script can also optionally reserve 5% disk space at the end of physical disk
 Using LVM partitioning is incompatible with stateless partitioning since the latter requires partitions without mountpoints.  
 As of today, the python script only uses a single disk. Multi disk support can be added on request.
 
+### Troubleshooting
+
+When anaconda install fails, you have to change the terminal (CTRL+ALT+F2) in order to check file `/tmp/prescript.log`.  
+Using a serial console, you'll have to use ESC+TAB in order to change terminal.
+
 ## Other scripts
 
 ### Setup Hypervisor
