@@ -48,7 +48,7 @@ if [ "${target}" == "hv" ]; then
     echo "/var/lib/libvirt" >> /etc/statetab.d/qemu
     echo "/etc/libvirt" >> /etc/statetab.d/qemu
     # For DNF to work we'd need /var/cache/dnf but obviously we won't
-    echo "dirs /etc/pcp" >> /etc/statetab.d/cockpit   # cockpit
+    echo "/etc/pcp" >> /etc/statetab.d/cockpit   # cockpit
 fi
 
 # Keep logs persistent too
