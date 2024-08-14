@@ -21,7 +21,7 @@ sleep 10
 echo "/opt/JWrapper-Remote Access" > /etc/statetab.d/simplehelp
 
 # Fix for simplehelp stopping because of systemd
-sed -i '/^ExecStart=.*/a RemainAfterExit=true' /etc/systemd/system/simplegateway.service
+sed -i '/^ExecStart=.*/a RemainAfterExit=true\nRestartSec=300\nRestart=always' /etc/systemd/system/simplegateway.service
 systemctl daemon-reload
 systemctl enable simplegateway
 systemctl restart simplegateway
