@@ -19,6 +19,8 @@ Automatic setup of machines with
 
 Of course, you can adjust those values or create new partition schemas directly in the python script.
 
+The kickstat file also provides the following:
+
 - Optional packages if physical machine
     - pre-configured smartmontools daemon
     - Optional IT8613 support
@@ -33,6 +35,7 @@ Of course, you can adjust those values or create new partition schemas directly 
     - Installation of non standard packages
     - ANSSI-BP028-High SCAP Profile configuration with report
     - Prometheus Node exporter installation
+- Enable cockpit and allow non root users
 - Cleanup of image after setup
 
 ### Technical notes about this script
