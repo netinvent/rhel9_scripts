@@ -6,7 +6,7 @@ __intname__ = "kickstart.partition_script.RHEL9"
 __author__ = "Orsiris de Jong"
 __copyright__ = "Copyright (C) 2022-2024 Orsiris de Jong - NetInvent SASU"
 __licence__ = "BSD 3-Clause"
-__build__ = "2024100101"
+__build__ = "2024100102"
 
 ### This is a pre-script for kickstart files in RHEL 9
 ### Allows specific partition schemes with one or more data partitions
@@ -85,7 +85,9 @@ PARTS_STATELSSS = [
 ]
 
 # Partition schema for generic machines with only one big root partition
-PARTS_GENERIC = [{"size": True, "fs": "xfs", "mountpoint": "/"}]
+PARTS_GENERIC = [
+    {"size": True, "fs": "xfs", "mountpoint": "/"}
+]
 
 # Partition schema for generic web servers (sized for minimum 20GiB web servers)
 PARTS_WEB = [
@@ -172,10 +174,14 @@ def get_first_disk_path() -> list:
     """
     if DEV_MOCK:
         return "/dev/vdx"
-    cmd = r"lsblk -nd --output NAME,TYPE | grep -i disk | grep -e '^v\|^s\|^h' | cut -f1 -d' '"
+    # -I only include disk types 8 = hard disk, 259 = nvme disk
+    # -ndp -n no headers, -d only devices (no partitions), -p show full path
+    # --output NAME,TYPE,HOTPLUG only output name and type
+    # awk will filter by non hotplug devices and return a line per disk
+    cmd = r"lsblk -I 8,259 -ndp --output HOTPLUG,NAME | awk '{ if ($1 == 0) { print $2 }}'"
     result, output = dirty_cmd_runner(cmd)
     if result:
-        disk_path = "/dev/" + output.split("\n")[0]
+        disk_path = output.split("\n")[0].strip()
         logger.info(f"First usable disk is {disk_path}")
         return disk_path
 
@@ -188,14 +194,23 @@ def zero_disk(disk_path: str) -> bool:
     Zero first disk bytes
     We need this instead of "cleanpart" directive since we're partitionning manually
     in order to have a custom partition schema
+    We'll also wipe partitions and then the partition table
     """
-    cmd = f"dd if=/dev/zero of={disk_path} bs=512 count=1 conv=notrunc && blockdev --rereadpt {disk_path}"
+    cmd = f"dd if=/dev/zero of={disk_path} bs=512 count=1 conv=notrunc && wipefs -a {disk_path}[0-9] -f && wipefs -a {disk_path} -f"
     logger.info(f"Zeroing disk {disk_path}")
     if DEV_MOCK:
         return True
     result, output = dirty_cmd_runner(cmd)
     if not result:
-        logger.error(f"Could not zero disk {disk_path}: {output}")
+        logger.error(f"Could not zero disk {disk_path}:\n{output}")
+
+    # blockdev -rereadpt works better than partprobe
+    # see https://serverfault.com/questions/749258/how-to-reset-a-harddisk-delete-mbr-delete-partitions-from-the-command-line-w
+    cmd = f"blockdev --rereadpt {disk_path}"
+    logger.info("Reloading partition table")
+    result, output = dirty_cmd_runner(cmd)
+    if not result:
+        logger.error(f"Could not reload partition table:\n{output}")
     return result
 
 
@@ -548,7 +563,7 @@ def execute_parted_commands(partitions_schema: dict) -> bool:
             # Properly align first partition to 1MiB for SSD disks
             partition_start = "1024KiB"
             partition_end = 1 + part_properties["size"]
-    
+
         elif part_index == "lvm":
             # Assume we only have one big lvm partition, don't bother with others
             # Also, we don't need to create it via parted, since this is automagically done by anaconda
