@@ -6,7 +6,7 @@ __intname__ = "kickstart.partition_script.RHEL9"
 __author__ = "Orsiris de Jong"
 __copyright__ = "Copyright (C) 2022-2024 Orsiris de Jong - NetInvent SASU"
 __licence__ = "BSD 3-Clause"
-__build__ = "2024041701"
+__build__ = "2024100101"
 
 ### This is a pre-script for kickstart files in RHEL 9
 ### Allows specific partition schemes with one or more data partitions
@@ -48,8 +48,8 @@ DEFAULT_USER_PASSWORD = r"$6$n4c4LJmfmwTgF80z$bPWqMYIVcMN9cK..MTAIXj.Rp2Q/AzhRd8
 
 ## Hostname
 # Hostname used depending on virtual or physical machine
-PHYSICAL_HOSTNAME = "pmv43.npf.local"
-VIRTUAL_HOSTNAME = "vmv43.npf.local"
+PHYSICAL_HOSTNAME = "pmv44.npf.local"
+VIRTUAL_HOSTNAME = "vmv44.npf.local"
 
 ## Package management
 # Add lm-sensros and smartmontools on physical machines
@@ -668,6 +668,11 @@ if DEV_MOCK:
     )
 
 TARGET = TARGET.lower()
+
+if TARGET in ["stateless", "hv-stateless"] and LVM_ENABLED:
+    logger.error("Stateless machines are not compatible with LVM. Stopping setup")
+    exit(223)
+
 if TARGET == "hv":
     PARTS = PARTS_HV
 elif TARGET == "hv-stateless":
