@@ -5,10 +5,10 @@
 # Requirements:
 # RHEL9 installed
 
-# You can define SIMPLEHELP_URL and HOST variables here or in a separate setup_simplehelp.conf.sh file
-[ -f ./setup_simplehelp.conf.sh ] && source ./setup_simplehelp.conf.sh
-[ -z "${SIMPLEHELP_URL}" ] && SIMPLEHELP_URL=""
-[ -z "${HOST}" ] && HOST=""
+# You can define SIMPLEHELP_URL and HOST variables here or in a separate setup_simplehelp.conf file
+[ -f ./setup_simplehelp.conf ] && source ./setup_simplehelp.conf
+[ -z "${SIMPLEHELP_URL}" ] && (echo "SIMPLEHELP_URL not defined in ./setup_simplehelp.conf" && exit 1)
+[ -z "${HOST}" ] && (echo "HOST not defined in ./setup_simplehelp.conf" && exit 1)
 
 cd /opt
 curl --output service.tar "${SIMPLEHELP_URL}"
