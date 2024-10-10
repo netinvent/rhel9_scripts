@@ -43,6 +43,7 @@ echo "/etc/snmp" >> /etc/statetab.d/snmp
 echo "/etc/NetworkManager/system-connections" >> /etc/statetab.d/nm
 echo "/etc/prometheus" >> /etc/statetab.d/prometheus
 echo "/var/lib/prometheus" >> /etc/statetab.d/prometheus
+
 if [ "${target}" == "hv" ]; then
     echo "Configuring specific HV Stateless"
     echo "/var/lib/libvirt" >> /etc/statetab.d/qemu
@@ -62,8 +63,8 @@ echo "files /etc/issue" >> /etc/rwtab.d/issue
 echo "dirs /var/lib/rsyslog" >> /etc/rwtab.d/rsyslog
 echo "dirs /var/lib/node_exporter/textfile_collector"  > /etc/rwtab.d/node_exporter
 echo "dirs /var/lib/pcp" >> /etc/rwtab.d/cockpit        # cockpit
-echo "dirs /var/lib/dnf" >> /etc/rwtab.d/cockpit        # cockpit packagekit (dnf cache)
-echo "dirs /var/cache" >> /etc/rwtab.d/cockpit          # cockpit packagekit (dnf cache)
+echo "dirs /var/lib/dnf" >> /etc/rwtab.d/dnf            # cockpit packagekit (dnf cache)
+echo "dirs /var/cache" >> /etc/rwtab.d/dnf              # cockpit packagekit (dnf cache)
 
 if [ "${target}" == "ztl" ]; then
     echo "Configuring specific ZTL stateless"
