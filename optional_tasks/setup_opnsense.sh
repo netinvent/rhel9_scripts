@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 
-## OPNSense Installer 2024012801 for RHEL9
+## OPNSense Installer 2024100101 for RHEL9 with PCI passthrough preconfigured
 
 # Requirements:
 # RHEL9 installed with NPF hypervisor script
 
 IMAGE_DIR=/var/lib/libvirt/images
 
+# VM Configuration
+VCPUS=8
+VCPUS=6
+RAM=10240
+DISK=60G
+OS_VARIANT=freebsd13.1  # osinfo-query os | grep freebsd
+
 function usage {
-    echo "$0 <tenant> <opnsense_version>"
+    echo "$0 <tenant> <opnsense_version> <pci_devs>"
+    echo "<pci_devs> is a comma separated list of PCI devices to passthrough"
+    echo "found via virsh nodedev-list --tree or lspci -nn"
+    echo "Example: $0 tenant 24.7 pci_0000_05_00_0,pci_0000_06_00_0"
     exit 1
 }
 
@@ -19,7 +29,12 @@ if [ "$1" == "" ]; then
 fi
 
 if [ "$2" == "" ]; then
-    echo "Requires link to OPNSense"
+    echo "Requires OPNSense version"
+    usage
+fi
+
+if [ "$3" == "" ]; then
+    echo "Requires PCI devices to passthrough"
     usage
 fi
 
@@ -75,24 +90,25 @@ fi
 # Removing .bz2 extension
 OPNSENSE_ISO="${OPNSENSE_ISO%.*}"
 
-PRODUCT=vmv4kvhm
-OS_VARIANT=freebsd13.1  # osinfo-query os
+PRODUCT=vmv4kvhv
 TENANT=${1}
 VM=opnsense01p.${TENANT}.local
 DISKPATH=${IMAGE_DIR}
-VCPUS=8
-VCPUS=6
-RAM=10240
-DISK=60G
 IO_MODE=,io="native,driver.iothread=${VCPUS},driver.queues=${VCPUS} --iothreads ${VCPUS}"
 ISO=${OPNSENSE_ISO}
-PCI_PASSTHROUGH="--host-device pci_0000_05_00_0 --host-device pci_0000_06_00_0 --network none"
+
+PCI_PASSTHROUGH="--network none"
+IFS=',' read -r -a host_devices <<< "${3}"
+for host_device in "${host_devices[@]}"; do
+    echo "Passthrough device ${host_device}"
+    PCI_PASSTHROUGH="${PCI_PASSTHROUGH} --host-device ${host_device}"
+done
 
 qemu-img create -f qcow2 -o extended_l2=on -o preallocation=metadata "${DISKPATH}/${VM}-disk0.qcow2" ${DISK}
 chown qemu:qemu "${DISKPATH}/${VM}-disk0.qcow2"
 virt-install --name ${VM} --ram ${RAM} --vcpus ${VCPUS} --cpu host --os-variant ${OS_VARIANT} --disk path=${DISKPATH}/${VM}-disk0.qcow2,bus=virtio,cache=none${IO_MODE} --channel unix,mode=bind,target_type=virtio,name=org.qemu.guest_agent.0 --watchdog i6300esb,action=reset --sound none --boot hd --autostart --sysinfo smbios,bios.vendor=npf --sysinfo smbios,system.manufacturer=NetPerfect --sysinfo smbios,system.product=${PRODUCT} --cdrom ${ISO} --graphics vnc,listen=127.0.0.1,keymap=fr --autoconsole text ${PCI_PASSTHROUGH}
 
- if [ $? -ne 0 ]; then
+if [ $? -ne 0 ]; then
     echo "#### WARING Installation FAILED ####"
 else
     echo "#### Setup done (check logs) ####"
