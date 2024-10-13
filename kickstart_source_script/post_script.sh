@@ -3,6 +3,21 @@
 # SCRIPT BUILD 2024101305
 
 LOG_FILE=/root/.npf-postinstall.log
+POST_INSTALL_SCRIPT_GOOD=true
+
+function log {
+    local log_line="${1}"
+    local level="${2}"
+
+    echo "${log_line}" >> "${LOG_FILE}"
+    echo "${log_line}"
+
+    if [ "${level}" == "ERROR" ]; then
+        POST_INSTALL_SCRIPT_GOOD=false
+    fi
+}
+
+log "Starting NPF post install at $(date)"
 
 # This is a duplicate from the Python script, but since we don't inherit pre settings, we need to redeclare it
 # Physical machine can return
@@ -10,20 +25,23 @@ LOG_FILE=/root/.npf-postinstall.log
 # Enhanced Virtualization
 
 # Hence we need to detect specific products
-dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|netperfect_vm" > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    IS_VIRTUAL=true
-else
+if ! type -p dmidecode > /dev/null 2>&1; then
+    log "dmidecode not found, trying to install it"
+    dnf install -y dmidecode
+fi
+if ! type -p dmidecode > /dev/null 2>&1; then
+    log "Cannot find dmidecode, let's assume this is a physical machine" "ERROR"
     IS_VIRTUAL=false
+else
+    dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|netperfect_vm" > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        IS_VIRTUAL=true
+    else
+        IS_VIRTUAL=false
+    fi
 fi
 
-function log {
-    local log_line="${1}"
-    echo "${log_line}" >> "${LOG_FILE}"
-    echo "${log_line}"
-}
 
-log "Starting NPF post install at $(date)"
 
 # We need a dns hostname in order to validate that we got internet before using internet related functions
 # Also, we need to make sure 
@@ -57,7 +75,7 @@ function check_internet {
     ip_result=$(ip a)
     route_result=$(ip route)
     resolv=$(cat /etc/resolv.conf)
-    log "Internet check failed. Please find output of diag commands:"
+    log "Internet check failed. Please find output of diag commands:" "ERROR"
     log "ip a:\n${ip_result}\n\n"
     log "ip route:\n${route_result}\n\n"
     log "resolv.conf content:\n${resolv}\n\n"
@@ -85,25 +103,26 @@ EOF
 check_internet
 if [ $? -eq 0 ]; then
     # Let's reinstall openscap in case we're running this script on a non prepared machine
-    dnf install -y openscap scap-security-guide
+    dnf install -y openscap scap-security-guide || log "OpenSCAP is missing and cannot be installed" "ERROR"
     log "Setting up scap profile with remote resources"
     oscap xccdf eval --profile anssi_bp28_high --fetch-remote-resources --remediate /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > /root/openscap_report/actions.log 2>&1
-    if [ $? -ne 0 ]; then
-        log "OpenSCAP failed. See /root/openscap_report/actions.log"
+    # result 2 is partially applied, which can be normal
+    if [ $? -eq 1 ]; then
+        log "OpenSCAP failed. See /root/openscap_report/actions.log" "ERROR"
     else
         log "Generating scap results with remote resources"
-        oscap xccdf generate guide --fetch-remote-resources --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2> "${LOG_FILE}"
-        [ $? -ne 0 ] && log "OpenSCAP results failed. See log file"
+        oscap xccdf generate guide --fetch-remote-resources --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2>> "${LOG_FILE}"
+        [ $? -ne 0 ] && log "OpenSCAP results failed. See log file" "ERROR"
     fi
 else
     log "Setting up scap profile without internet"
     oscap xccdf eval --profile anssi_bp28_high --remediate /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > /root/openscap_report/actions.log 2>&1
-    if [ $? -ne 0 ]; then
-        log "OpenSCAP failed. See /root/openscap_report/actions.log"
+    if [ $? -eq 1 ]; then
+        log "OpenSCAP failed. See /root/openscap_report/actions.log" "ERROR"
     else
         log "Generating scap results without internet"
-        oscap xccdf generate guide --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2> "${LOG_FILE}"
-        [ $? -ne 0 ] && log "OpenSCAP results failed. See log file"
+        oscap xccdf generate guide --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2>> "${LOG_FILE}"
+        [ $? -ne 0 ] && log "OpenSCAP results failed. See log file" "ERROR"
     fi
 fi
 
@@ -116,15 +135,15 @@ setsebool -P secure_mode_insmod=off
 check_internet
 if [ $? -eq 0 ]; then
     log "Install available with internet. setting up additional packages."
-    dnf install -4 -y epel-release
-    dnf install -4 -y htop atop nmon iftop iptraf
+    dnf install -4 -y epel-release 2>> "${LOG_FILE}" || log "Failed to install epel-release" "ERROR"
+    dnf install -4 -y htop atop nmon iftop iptraf 2>> "${LOG_FILE}" || log "Failed to install additional tools" "ERROR"
 else
     log "No epel available without internet. Didn't install additional packages."
 fi
 
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up disk SMART tooling"
-    echo  "DEVICESCAN -H -l error -f -C 197+ -U 198+ -t -l selftest -I 194 -n sleep,7,q -s (S/../.././10|L/../../[5]/13)" >> /etc/smartmontools/smartd.conf
+    echo "DEVICESCAN -H -l error -f -C 197+ -U 198+ -t -l selftest -I 194 -n sleep,7,q -s (S/../.././10|L/../../[5]/13)" >> /etc/smartmontools/smartd.conf 
     systemctl enable --now smartd
 
     log "Setting up smart script for prometheus"
@@ -334,21 +353,22 @@ for device in ${device_list}; do
     esac
 done | format_output
 EOF
-    chmod +x /usr/local/bin/smartmon.sh
-    echo "Setting up smart script for prometheus task" >> "${LOG_FILE}"
+[ $? -ne 0 ] && log "Failed to create /usr/local/bin/smartmon.sh" "ERROR"
+
+    chmod +x /usr/local/bin/smartmon.sh 2>> "${LOG_FILE}" || log "Failed to chmod /usr/local/bin/smartmon.sh" "ERROR"
+    log "Setting up smart script for prometheus task"
     [ ! -d /var/lib/node_exporter/textfile_collector ] && mkdir -p /var/lib/node_exporter/textfile_collector
     echo "*/5 * * * * root /usr/local/bin/smartmon.sh > /var/lib/node_exporter/textfile_collector/smart_metrics.prom" >> /etc/crontab
 
     log "Setting up iTCO_wdt watchdog"
     echo "iTCO_wdt" > /etc/modules-load.d/10-watchdog.conf
 
-    sensors-detect --auto | grep "no driver for ITE IT8613E" > /dev/null 2>&1
+    sensors-detect --auto | grep "no driver for ITE 8613E" > /dev/null 2>&1
     if [ $? -eq 0 ]; then
-        log "Setting up TCO Watchdog support and partial ITE 8613E support"
+        log "Setting up partial ITE 8613E support"
         echo "it87" > /etc/modules-load.d/20-it87.conf
         echo "options it87 force_id=0x8620" > /etc/modprobe.d/it87.conf
     fi
-
     log "Setting up tuned profiles"
 
     [ ! -d /etc/tuned/npf-eco ] && mkdir /etc/tuned/npf-eco
@@ -394,6 +414,7 @@ vm.dirty_writeback_centisecs = 100
 #script=\${i:PROFILE_DIR}/script.sh
 script=script.sh
 EOF
+    [ $? -ne 0 ] && log "Failed to create /etc/tuned/npf-eco/tuned.conf" "ERROR"
 
     cat << 'EOF' > /etc/tuned/npf-perf/tuned.conf
 [main]
@@ -435,6 +456,7 @@ vm.dirty_writeback_centisecs = 100
 #script=\${i:PROFILE_DIR}/script.sh
 script=script.sh
 EOF
+    [ $? -ne 0 ] && log "Failed to create /etc/tuned/npf-perf/tuned.conf" "ERROR"
 
     cat << 'EOF' > /etc/tuned/npf-eco/script.sh
 #!/usr/bin/env bash
@@ -469,6 +491,7 @@ cpupower idle-set -E
 # Disable any higher than 50ns latency idle states
 cpupower idle-set -D 50
 EOF
+    [ $? -ne 0 ] && log "Failed to create /etc/tuned/npf-eco/script.sh" "ERROR"
 
     cat << 'EOF' > /etc/tuned/npf-perf/script.sh
 #!/usr/bin/env bash
@@ -499,19 +522,20 @@ cpupower idle-set -E
 # Disable any higher than 50ns latency idle states
 cpupower idle-set -D 50
 EOF
+    [ $? -ne 0 ] && log "Failed to create /etc/tuned/npf-perf/script.sh" "ERROR"
 
-    chmod +x /etc/tuned/{npf-eco,npf-perf}/script.sh
+    chmod +x /etc/tuned/{npf-eco,npf-perf}/script.sh 2>> "${LOG_FILE}" || log "Failed to chmod on tuned scripts" "ERROR"
 else
     log "This is a virtual machine. We will not setup hardware tooling"
 fi
 
 # Configure serial console
 log "Setting up serial console"
-systemctl enable serial-getty@ttyS0.service
-sed -i 's/^GRUB_TERMINAL_OUTPUT="console"/GRUB_TERMINAL="serial console"\nGRUB_SERIAL_COMMAND="serial --unit=0 --word=8 --parity=no --speed 115200 --stop=1"/g' /etc/default/grub
+systemctl enable serial-getty@ttyS0.service 2>> "${LOG_FILE}" || log "Enabling serial getty failed" "ERROR"
+sed -i 's/^GRUB_TERMINAL_OUTPUT="console"/GRUB_TERMINAL="serial console"\nGRUB_SERIAL_COMMAND="serial --unit=0 --word=8 --parity=no --speed 115200 --stop=1"/g' /etc/default/grub 2>> "${LOG_FILE}" || log "sed failed on /etc/default/grub" "ERROR"
 # Update grub to add console
-grubby --update-kernel=ALL --args="console=ttyS0,115200,n8 console=tty0"
-grub2-mkconfig -o /boot/grub2/grub.cfg
+grubby --update-kernel=ALL --args="console=ttyS0,115200,n8 console=tty0" || log "Enabling serial getty failed" "ERROR"
+grub2-mkconfig -o /boot/grub2/grub.cfg 2>> "${LOG_FILE}" || log "grub2-mkconfig failed" "ERROR"
 
 
 # Setup automagic terminal resize
@@ -553,60 +577,70 @@ resize_term2() {
 # Run only if we're in a serial terminal
 [ $(tty) == /dev/ttyS0 ] && resize_term2
 EOF
+[ $? -ne 0 ] && log "Failed to create /etc/profile.d/term_resize.sh" "ERROR"
 
 # Configure persistent journal
 log "Setting up persistent boot journal"
 [ ! -d /var/log/journal ] && mkdir /var/log/journal
 systemd-tmpfiles --create --prefix /var/log/journal >> "${LOG_FILE}"
-sed -i 's/.*Storage=.*/Storage=persistent/g' /etc/systemd/journald.conf
+sed -i 's/.*Storage=.*/Storage=persistent/g' /etc/systemd/journald.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/systemd/journald.conf" "ERROR"
 killall -USR1 systemd-journald
 # Configure max journal size
 journalctl --vacuum-size=2G
 
 log "Setup DNF automatic except for updates that require reboot"
 systemctl disable dnf-makecache.timer
-sed -i 's/^upgrade_type[[:space:]]*=[[:space:]].*/upgrade_type = security/g' /etc/dnf/automatic.conf
-sed -i 's/^download_updates[[:space:]]*=[[:space:]].*/download_updates = yes/g' /etc/dnf/automatic.conf
-sed -i 's/^apply_updates[[:space:]]*=[[:space:]].*/apply_updates = yes/g' /etc/dnf/automatic.conf
-sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio,motd/g' /etc/dnf/automatic.conf
+sed -i 's/^upgrade_type[[:space:]]*=[[:space:]].*/upgrade_type = security/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
+sed -i 's/^download_updates[[:space:]]*=[[:space:]].*/download_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
+sed -i 's/^apply_updates[[:space:]]*=[[:space:]].*/apply_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
+sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio,motd/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 systemctl enable --now dnf-automatic.timer
 
 # Setup tuned profile
+if ! type -p tuned > /dev/null 2>&1; then
+        dnf install -y tuned  2>> "${LOG_FILE}" || log "tuned is missing and cannot be installed" "ERROR"
+    fi
+
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up hardware tuned profile"
     systemctl enable tuned
-    tuned-adm profile npf-eco
+    tuned-adm profile npf-eco 2>> "${LOG_FILE}" || log "Failed to setup tuned profile for physical machine" "ERROR"
 else
     log "Setting up virtual tuned profile"
     systemctl enable tuned
-    tuned-adm profile virtual-guest
+    tuned-adm profile virtual-guest 2>> "${LOG_FILE}" || log "Failed to setup tuned profile for virtual machine" "ERROR"
 fi
 
 # Enable guest agent on KVM
 if [ ${IS_VIRTUAL} == true ]; then
     log "Setting up Qemu guest agent"
-    setsebool -P virt_qemu_ga_read_nonsecurity_files 1
+    setsebool -P virt_qemu_ga_read_nonsecurity_files 1 2>> "${LOG_FILE}" || log "Failed to SELinux for qemu virtual machine" "ERROR"
 	  systemctl enable --now qemu-guest-agent
 fi
 
 # Prometheus support
 check_internet
 if [ $? -eq 0 ]; then
-    log "Installing Prometheus"
+    log "Installing Node exporter"
     cd /opt
     [ ! -d /var/lib/node_exporter/textfile_collector ] && mkdir -p /var/lib/node_exporter/textfile_collector
-    curl -sSfL https://raw.githubusercontent.com/carlocorradini/node_exporter_installer/main/install.sh | INSTALL_NODE_EXPORTER_SKIP_FIREWALL=true INSTALL_NODE_EXPORTER_EXEC="--collector.logind --collector.interrupts --collector.systemd --collector.processes --collector.textfile.directory=/var/lib/node_exporter/textfile_collector" sh -s -
+    curl -sSfL https://raw.githubusercontent.com/carlocorradini/node_exporter_installer/main/install.sh | INSTALL_NODE_EXPORTER_SKIP_FIREWALL=true INSTALL_NODE_EXPORTER_EXEC="--collector.logind --collector.interrupts --collector.systemd --collector.processes --collector.textfile.directory=/var/lib/node_exporter/textfile_collector" sh -s - 2>> "${LOG_FILE}" || log "Failed to setup node_exporter" "ERROR"
 else
-    log "No prometheus installed"
+    log "No node_exporter installed" "ERROR"
 fi
 
 # Setting up watchdog in systemd
 log "Setting up systemd watchdog"
-sed -i -e 's,^#RuntimeWatchdogSec=.*,RuntimeWatchdogSec=60s,' /etc/systemd/system.conf
+sed -i -e 's,^#RuntimeWatchdogSec=.*,RuntimeWatchdogSec=60s,' /etc/systemd/system.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/systemd/system.conf" "ERROR"
 
 
 # Setting up banner
-cat << 'EOF' > /etc/motd
+if [ "${POST_INSTALL_SCRIPT_GOOD}" != true ]; then
+    MOTD_MSG="NPF POST SCRIPT: FAILURE"
+else
+    MOTD_MSG="NPF POST SCRIPT: SUCCESS"
+fi
+cat << EOF > /etc/motd
 ############################################################
 # <<Un grand pouvoir implique de grandes responsabilités>> #
 #                                                          #
@@ -616,9 +650,10 @@ cat << 'EOF' > /etc/motd
 #                 gestion des changements.                 #
 #                                                          #
 #       Toute connexion à ce système est journalisée       #
-#                                                          #
+#                 ${MOTD_MSG}                 #
 ############################################################
 EOF
+[ $? -ne 0 ] && log "Failed to create /etc/motd" "ERROR"
 
 # Cleanup kickstart file replaced with inst.nosave=all_ks
 [ -f /root/anaconda-ks.cfg ] && /bin/shred -uz /root/anaconda-ks.cfg
@@ -639,4 +674,4 @@ EOF
 # Make sure we write everything to disk
 sync; echo 3 > /proc/sys/vm/drop_caches
 
-log "Finished at $(date)"
+log "Finished at $(date) with state ${POST_INSTALL_SCRIPT_GOOD}"
