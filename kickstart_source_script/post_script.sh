@@ -13,14 +13,24 @@ function log {
 log "Starting NPF post install at $(date)"
 
 # We need a dns hostname in order to validate that we got internet before using internet related functions
+# Also, we need to make sure 
 function check_internet {
     fqdn_host="one.one.one.one kernel.org github.com"
-    ip_hosts="1.1.1.1 8.8.8.8 9.9.9.9"
+    ip_hosts="2606:4700:4700::1001 8.8.8.8 9.9.9.9"
     for host in ${fqdn_host[@]}; do
-        ping -c2 "${host}" > /dev/null 2>&1
+        ping -6 -c2 "${host}" > /dev/null 2>&1
         if [ $? -eq 0 ]; then
-            log "FQDN check to ${host} works."
+            log "FQDN IPv6 echo request to ${host} works."
             return 0
+        else
+            log "FQDN IPv6 echo request to ${host} failed."
+        fi
+        ping -4 -c2 "${host}" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            log "FQDN IPv4 echo request to ${host} works."
+            return 0
+        else:
+            log "FQDN IPv4 echo request to ${host} failed."
         fi
     done
     log "Looks like we cannot access internet via hostnames. Let's try IPs"
@@ -564,7 +574,7 @@ is_virtual
 if [ $? -ne 0 ]; then
     log "Setting up Qemu guest agent"
     setsebool -P virt_qemu_ga_read_nonsecurity_files 1
-	systemctl enable --now qemu-guest-agent
+	  systemctl enable --now qemu-guest-agent
 fi
 
 # Prometheus support
