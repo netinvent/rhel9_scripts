@@ -144,7 +144,7 @@ fi
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up disk SMART tooling"
     echo "DEVICESCAN -H -l error -f -C 197+ -U 198+ -t -l selftest -I 194 -n sleep,7,q -s (S/../.././10|L/../../[5]/13)" >> /etc/smartmontools/smartd.conf 
-    systemctl enable --now smartd
+    systemctl enable --now smartd 2>> "${LOG_FILE}" || log "Failed to start smartd" "ERROR"
 
     log "Setting up smart script for prometheus"
     cat << 'EOF' > /usr/local/bin/smartmon.sh
@@ -582,32 +582,31 @@ EOF
 # Configure persistent journal
 log "Setting up persistent boot journal"
 [ ! -d /var/log/journal ] && mkdir /var/log/journal
-systemd-tmpfiles --create --prefix /var/log/journal >> "${LOG_FILE}"
+systemd-tmpfiles --create --prefix /var/log/journal 2>> "${LOG_FILE}" || log "Failed to create systemd-tmpfiles" "ERROR"
 sed -i 's/.*Storage=.*/Storage=persistent/g' /etc/systemd/journald.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/systemd/journald.conf" "ERROR"
 killall -USR1 systemd-journald
 # Configure max journal size
-journalctl --vacuum-size=2G
+journalctl --vacuum-size=2G 2>> "${LOG_FILE}" || log "Failed to set journald vaccumsize" "ERROR"
 
 log "Setup DNF automatic except for updates that require reboot"
-systemctl disable dnf-makecache.timer
+systemctl disable dnf-makecache.timer 2>> "${LOG_FILE}" || log "Failed to disable dnf cache timer" "ERROR"
 sed -i 's/^upgrade_type[[:space:]]*=[[:space:]].*/upgrade_type = security/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 sed -i 's/^download_updates[[:space:]]*=[[:space:]].*/download_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 sed -i 's/^apply_updates[[:space:]]*=[[:space:]].*/apply_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio,motd/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
-systemctl enable --now dnf-automatic.timer
+systemctl enable --now dnf-automatic.timer 2>> "${LOG_FILE}" || log "Failed to start dnf-automatic timer" "ERROR"
 
 # Setup tuned profile
 if ! type -p tuned > /dev/null 2>&1; then
         dnf install -y tuned  2>> "${LOG_FILE}" || log "tuned is missing and cannot be installed" "ERROR"
     fi
 
+systemctl enable tuned 2>> "${LOG_FILE}" || log "Failed to start tuned" "ERROR"
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up hardware tuned profile"
-    systemctl enable tuned
     tuned-adm profile npf-eco 2>> "${LOG_FILE}" || log "Failed to setup tuned profile for physical machine" "ERROR"
 else
     log "Setting up virtual tuned profile"
-    systemctl enable tuned
     tuned-adm profile virtual-guest 2>> "${LOG_FILE}" || log "Failed to setup tuned profile for virtual machine" "ERROR"
 fi
 
@@ -615,7 +614,7 @@ fi
 if [ ${IS_VIRTUAL} == true ]; then
     log "Setting up Qemu guest agent"
     setsebool -P virt_qemu_ga_read_nonsecurity_files 1 2>> "${LOG_FILE}" || log "Failed to SELinux for qemu virtual machine" "ERROR"
-	  systemctl enable --now qemu-guest-agent
+	  systemctl enable --now qemu-guest-agent 2>> "${LOG_FILE}" || log "Failed to start qumu-guest-agent" "ERROR"
 fi
 
 # Prometheus support
