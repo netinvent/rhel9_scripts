@@ -539,8 +539,15 @@ killall -USR1 systemd-journald
 # Configure max journal size
 journalctl --vacuum-size=2G
 
-# Services
+log "Setup DNF automatic except for updates that require reboot"
 systemctl disable dnf-makecache.timer
+sed -i 's/^upgrade_type[[:space:]]*=[[:space:]].*/upgrade_type = security/g' /etc/dnf/automatic.conf
+sed -i 's/^download_updates[[:space:]]*=[[:space:]].*/download_updates = yes/g' /etc/dnf/automatic.conf
+sed -i 's/^apply_updates[[:space:]]*=[[:space:]].*/apply_updates = yes/g' /etc/dnf/automatic.conf
+sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio,motd/g' /etc/dnf/automatic.conf
+systemctl enable --now dnf-automatic.timer
+
+# Setup tuned profile
 is_virtual
 if [ $? -ne 0 ]; then
     log "Setting up hardware tuned profile"
