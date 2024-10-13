@@ -531,7 +531,7 @@ fi
 
 # Configure serial console
 log "Setting up serial console"
-systemctl enable serial-getty@ttyS0.service 2>> "${LOG_FILE}" || log "Enabling serial getty failed" "ERROR"
+systemctl enable --now serial-getty@ttyS0.service 2>> "${LOG_FILE}" || log "Enabling serial getty failed" "ERROR"
 sed -i 's/^GRUB_TERMINAL_OUTPUT="console"/GRUB_TERMINAL="serial console"\nGRUB_SERIAL_COMMAND="serial --unit=0 --word=8 --parity=no --speed 115200 --stop=1"/g' /etc/default/grub 2>> "${LOG_FILE}" || log "sed failed on /etc/default/grub" "ERROR"
 # Update grub to add console
 grubby --update-kernel=ALL --args="console=ttyS0,115200,n8 console=tty0" || log "Enabling serial getty failed" "ERROR"
@@ -598,10 +598,10 @@ systemctl enable --now dnf-automatic.timer 2>> "${LOG_FILE}" || log "Failed to s
 
 # Setup tuned profile
 if ! type -p tuned > /dev/null 2>&1; then
-        dnf install -y tuned  2>> "${LOG_FILE}" || log "tuned is missing and cannot be installed" "ERROR"
-    fi
+    dnf install -y tuned  2>> "${LOG_FILE}" || log "tuned is missing and cannot be installed" "ERROR"
+fi
 
-systemctl enable tuned 2>> "${LOG_FILE}" || log "Failed to start tuned" "ERROR"
+systemctl enable --now tuned 2>> "${LOG_FILE}" || log "Failed to start tuned" "ERROR"
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up hardware tuned profile"
     tuned-adm profile npf-eco 2>> "${LOG_FILE}" || log "Failed to setup tuned profile for physical machine" "ERROR"
