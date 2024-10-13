@@ -267,8 +267,10 @@ def get_allocated_space(partitions_schema: dict) -> int:
     return allocated_space
 
 
-def get_partition_schema() -> dict:
-    global PARTS
+def get_partition_schema(selected_partition_schema: dict) -> dict:
+    """
+    Return a valid partition schema dict to apply with sizes and mountpoints, generated from the selected partition schema dict
+    """
 
     mem_size = get_mem_size()
     # Swap size will be at least 1446MiB since RHEL9 will require at least 3GiB (minus crash kernel) to install
@@ -304,7 +306,7 @@ def get_partition_schema() -> dict:
         """
         Add fixed size partitions to partition schema
         """
-        for index, partition in enumerate(PARTS):
+        for index, partition in enumerate(selected_partition_schema):
             # Shift index so we don't overwrite boot partition indexes
             index = str(int(index) + 10)
             if not isinstance(partition["size"], bool) and isinstance(
@@ -322,7 +324,7 @@ def get_partition_schema() -> dict:
         """
         total_percentage = 0
         free_space = USABLE_DISK_SPACE - get_allocated_space(partitions_schema)
-        for index, partition in enumerate(PARTS):
+        for index, partition in enumerate(selected_partition_schema):
             index = str(int(index) + 10)
             if isinstance(partition["size"], str) and partition["size"][-1] == "%":
                 percentage = int(partition["size"][:-1])
@@ -343,7 +345,7 @@ def get_partition_schema() -> dict:
         Determine the number of partitions that will fill the remaining space
         """
         filler_parts = 0
-        for partition in PARTS:
+        for partition in selected_partition_schema:
             if isinstance(partition["size"], bool):
                 filler_parts += 1
         return filler_parts
@@ -352,7 +354,7 @@ def get_partition_schema() -> dict:
         """
         Populate partition schema with FS and mountpoints
         """
-        for index, partition in enumerate(PARTS):
+        for index, partition in enumerate(selected_partition_schema):
             index = str(int(index + 10))
             for key, value in partition.items():
                 if key == "size":
@@ -368,7 +370,7 @@ def get_partition_schema() -> dict:
 
     ## FN ENTRY POINT
     # MBR can have max 4 primary partitions, can't be bothered to code this in 2024
-    if len(PARTS) >= 3 and not IS_GPT and not LVM_ENABLED:
+    if len(selected_partition_schema) >= 3 and not IS_GPT and not LVM_ENABLED:
         logger.error(
             "We cannot create more than 4 parts in MBR mode (boot + swap + two other partitions)...Didn't bother to code that path for prehistoric systems. Consider enabling LVM"
         )
@@ -385,12 +387,12 @@ def get_partition_schema() -> dict:
     logger.info(f"Number of filler partitions: {filler_parts}")
     # Depending on how many partitions fill the remaining space, convert filler partitions to percentages
     if filler_parts > 1:
-        for index, partition in enumerate(PARTS):
+        for index, partition in enumerate(selected_partition_schema):
             # If we already have percentage partitions, we need to drop them now
             if isinstance(partition["size"], str) and partition["size"][-1] == "%":
-                PARTS[index]["size"] = "already calculated"
+                selected_partition_schema[index]["size"] = "already calculated"
             if isinstance(partition["size"], bool):
-                PARTS[index]["size"] = str(int(100 / filler_parts)) + "%"
+                selected_partition_schema[index]["size"] = str(int(100 / filler_parts)) + "%"
         # Now we have to do the percentage calculations again
         partitions_schema = add_percent_size_partitions(partitions_schema)
     else:
@@ -403,8 +405,8 @@ def get_partition_schema() -> dict:
             logger.error(
                 f"Usable disk space: {USABLE_DISK_SPACE}, schema allocated space: {get_allocated_space(partitions_schema)}"
             )
-            return
-        for index, partition in enumerate(PARTS):
+            sys.exit(1)
+        for index, partition in enumerate(selected_partition_schema):
             index = str(int(index + 10))
             if isinstance(partition["size"], bool):
                 if LVM_ENABLED:
@@ -490,6 +492,7 @@ def prepare_non_kickstart_partitions(partitions_schema: dict) -> bool:
             if not result:
                 logger.error(f"Command {cmd} failed: {output}")
                 return False
+        return result
 
     part_number = 1
     for part_index, part_properties in partitions_schema.items():
@@ -686,8 +689,9 @@ TARGET = TARGET.lower()
 
 if TARGET in ["stateless", "hv-stateless"] and LVM_ENABLED:
     logger.error("Stateless machines are not compatible with LVM. Stopping setup")
-    exit(223)
+    sys.exit(223)
 
+PARTS = None
 if TARGET == "hv":
     PARTS = PARTS_HV
 elif TARGET == "hv-stateless":
@@ -702,7 +706,7 @@ elif TARGET == "anssi":
     PARTS = PARTS_ANSSI
 else:
     logger.error(f"Bad target given: {TARGET}")
-    exit(222)
+    sys.exit(222)
 logger.info(f"Running script for target: {TARGET}")
 
 
@@ -731,7 +735,7 @@ if not IS_VIRTUAL and REDUCE_PHYSICAL_DISK_SPACE:
         f"Reducing usable disk space by {REDUCE_PHYSICAL_DISK_SPACE}% from {REAL_USABLE_DISK_SPACE} to {USABLE_DISK_SPACE} since we deal with physical disks"
     )
 
-partitions_schema = get_partition_schema()
+partitions_schema = get_partition_schema(PARTS)
 if not partitions_schema:
     sys.exit(4)
 if not validate_partition_schema(partitions_schema):
