@@ -84,15 +84,20 @@ EOF
 
 check_internet
 if [ $? -eq 0 ]; then
+        # Let's reinstall openscap in case we're running this script on a non prepared machine
+        dnf install -y openscap scap-security-guide
         log "Setting up scap profile with internet"
         oscap xccdf eval --profile anssi_bp28_high --fetch-remote-resources --remediate /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > /root/openscap_report/actions.log 2>&1
+        [ $? -ne 0 ] && log "OpenSCAP failed. See /root/openscap_report/actions.log"
 else
         log "Setting up scap profile without internet"
-        oscap xccdf eval --profile anssi_bp28_high --remediate /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > /tmp/scap 2>&1
+        oscap xccdf eval --profile anssi_bp28_high --remediate /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > /root/openscap_report/actions.log 2>&1
+        [ $? -ne 0 ] && log "OpenSCAP failed. See /root/openscap_report/actions.log"
 fi
 
 log "Generating scap results"
-oscap xccdf generate guide --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html"
+oscap xccdf generate guide --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2> "${LOG_FILE}"
+[ $? -ne 0 ] && log "OpenSCAP results failed. See log file"
 
 # Fix firewall cannot load after anssi_bp28_high
 setsebool -P secure_mode_insmod=off
