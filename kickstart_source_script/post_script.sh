@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024101305
+# SCRIPT BUILD 2024101306
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
@@ -632,6 +632,9 @@ fi
 log "Setting up systemd watchdog"
 sed -i -e 's,^#RuntimeWatchdogSec=.*,RuntimeWatchdogSec=60s,' /etc/systemd/system.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/systemd/system.conf" "ERROR"
 
+log "Setup cake qdisc algorith and bbr congestion control"
+echo net.core.default_qdisc=cake >> /etc/sysctl.d/99-sched.conf || log "Failed to write to /etc/sysctl.d/99-sched.conf" "ERROR"
+echo net.ipv4.tcp_congestion_control=bbr >> /etc/sysctl.d/99-sched.conf || log "Failed to write to /etc/sysctl.d/99-sched.conf" "ERROR"
 
 # Setting up banner
 if [ "${POST_INSTALL_SCRIPT_GOOD}" != true ]; then
