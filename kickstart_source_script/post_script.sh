@@ -571,7 +571,7 @@ fi
 
 # Enable guest agent on KVM
 is_virtual
-if [ $? -ne 0 ]; then
+if [ $? -eq 0 ]; then
     log "Setting up Qemu guest agent"
     setsebool -P virt_qemu_ga_read_nonsecurity_files 1
 	  systemctl enable --now qemu-guest-agent
