@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024101302
+# SCRIPT BUILD 2024101303
 
 LOG_FILE=/root/.npf-postinstall.log
 
@@ -80,7 +80,7 @@ IPv6 \6
 EOF
 
 # Disable --fetch-remote-resources on machines without internet
-mkdir /root/openscap_report
+[ ! -d /root/openscap_report ] && mkdir /root/openscap_report
 
 check_internet
 if [ $? -eq 0 ]; then
@@ -323,7 +323,7 @@ done | format_output
 EOF
     chmod +x /usr/local/bin/smartmon.sh
     echo "Setting up smart script for prometheus task" >> "${LOG_FILE}"
-    mkdir -p /var/lib/node_exporter/textfile_collector
+    [ ! -d /var/lib/node_exporter/textfile_collector ] && mkdir -p /var/lib/node_exporter/textfile_collector
     echo "*/5 * * * * root /usr/local/bin/smartmon.sh > /var/lib/node_exporter/textfile_collector/smart_metrics.prom" >> /etc/crontab
 
     log "Setting up iTCO_wdt watchdog"
@@ -336,9 +336,10 @@ EOF
         echo "options it87 force_id=0x8620" > /etc/modprobe.d/it87.conf
     fi
 
-  log "Setting up tuned profiles"
+    log "Setting up tuned profiles"
 
-  mkdir /etc/tuned/{npf-eco,npf-perf}
+    [ ! -d /etc/tuned/npf-eco ] && mkdir /etc/tuned/npf-eco
+    [ ! -d /etc/tuned/npf-perf ]&& mkdir /etc/tuned/npf-perf
 
   cat << 'EOF' > /etc/tuned/npf-eco/tuned.conf
 [main]
@@ -542,7 +543,7 @@ EOF
 
 # Configure persistent journal
 log "Setting up persistent boot journal"
-mkdir /var/log/journal
+[ ! -d /var/log/journal ] && mkdir /var/log/journal
 systemd-tmpfiles --create --prefix /var/log/journal >> "${LOG_FILE}"
 sed -i 's/.*Storage=.*/Storage=persistent/g' /etc/systemd/journald.conf
 killall -USR1 systemd-journald
@@ -581,7 +582,9 @@ fi
 check_internet
 if [ $? -eq 0 ]; then
     log "Installing Prometheus"
-    cd /opt && mkdir -p /var/lib/node_exporter/textfile_collector && curl -sSfL https://raw.githubusercontent.com/carlocorradini/node_exporter_installer/main/install.sh | INSTALL_NODE_EXPORTER_SKIP_FIREWALL=true INSTALL_NODE_EXPORTER_EXEC="--collector.logind --collector.interrupts --collector.systemd --collector.processes --collector.textfile.directory=/var/lib/node_exporter/textfile_collector" sh -s -
+    cd /opt
+    [ ! -d /var/lib/node_exporter/textfile_collector ] && mkdir -p /var/lib/node_exporter/textfile_collector
+    curl -sSfL https://raw.githubusercontent.com/carlocorradini/node_exporter_installer/main/install.sh | INSTALL_NODE_EXPORTER_SKIP_FIREWALL=true INSTALL_NODE_EXPORTER_EXEC="--collector.logind --collector.interrupts --collector.systemd --collector.processes --collector.textfile.directory=/var/lib/node_exporter/textfile_collector" sh -s -
 else
     log "No prometheus installed"
 fi
@@ -607,8 +610,8 @@ cat << 'EOF' > /etc/motd
 EOF
 
 # Cleanup kickstart file replaced with inst.nosave=all_ks
-/bin/shred -uz /root/anaconda-ks.cfg
-/bin/shred -uz /root/original-ks.cfg
+[ -f /root/anaconda-ks.cfg ] && /bin/shred -uz /root/anaconda-ks.cfg
+[ -f /root/original-ks.cfg ] && /bin/shred -uz /root/original-ks.cfg
 
 # Clean up log files, caches and temp
 # Clear caches, files, and logs
