@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024101304
+# SCRIPT BUILD 2024101305
 
 LOG_FILE=/root/.npf-postinstall.log
+
+# This is a duplicate from the Python script, but since we don't inherit pre settings, we need to redeclare it
+# Physical machine can return
+# VME (Virtual mode extension)
+# Enhanced Virtualization
+
+# Hence we need to detect specific products
+dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|netperfect_vm" > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    IS_VIRTUAL=true
+else
+    IS_VIRTUAL=false
+fi
 
 function log {
     local log_line="${1}"
@@ -52,21 +65,8 @@ function check_internet {
     return 1
 }
 
-function is_virtual {
-# This is a duplicate from the Python script, but since we don't inherit pre settings, we need to redeclare it
-# Physical machine can return
-# VME (Virtual mode extension)
-# Enhanced Virtualization
-
-# Hence we need to detect specific products
-    dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|netperfect_vm" > /dev/null 2>&1
-}
-
-# Create issue file
-
 # NPF-MOD
-is_virtual
-if [ $? -eq 0 ]; then
+if [ ${IS_VIRTUAL} == true ]; then
     NPF_NAME=VMv4.4
 else
     NPF_NAME=PMv4.4
@@ -122,8 +122,7 @@ else
     log "No epel available without internet. Didn't install additional packages."
 fi
 
-is_virtual
-if [ $? -ne 0 ]; then
+if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up disk SMART tooling"
     echo  "DEVICESCAN -H -l error -f -C 197+ -U 198+ -t -l selftest -I 194 -n sleep,7,q -s (S/../.././10|L/../../[5]/13)" >> /etc/smartmontools/smartd.conf
     systemctl enable --now smartd
@@ -573,8 +572,7 @@ sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio,motd/g' /etc/dnf/
 systemctl enable --now dnf-automatic.timer
 
 # Setup tuned profile
-is_virtual
-if [ $? -ne 0 ]; then
+if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up hardware tuned profile"
     systemctl enable tuned
     tuned-adm profile npf-eco
@@ -585,8 +583,7 @@ else
 fi
 
 # Enable guest agent on KVM
-is_virtual
-if [ $? -eq 0 ]; then
+if [ ${IS_VIRTUAL} == true ]; then
     log "Setting up Qemu guest agent"
     setsebool -P virt_qemu_ga_read_nonsecurity_files 1
 	  systemctl enable --now qemu-guest-agent
