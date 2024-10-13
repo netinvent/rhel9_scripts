@@ -6,7 +6,7 @@ __intname__ = "kickstart.partition_script.RHEL9"
 __author__ = "Orsiris de Jong"
 __copyright__ = "Copyright (C) 2022-2024 Orsiris de Jong - NetInvent SASU"
 __licence__ = "BSD 3-Clause"
-__build__ = "2024100102"
+__build__ = "2024101301"
 
 ### This is a pre-script for kickstart files in RHEL 9
 ### Allows specific partition schemes with one or more data partitions
