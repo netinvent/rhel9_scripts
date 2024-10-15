@@ -1,10 +1,5 @@
-on:
-  push:
-    branches:
-      - master
-
-name: "Trigger: Push action"
-permissions: {}
+name: ShellCheck
+on: [push]
 
 jobs:
   shellcheck:
@@ -14,3 +9,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './kickstart_source_script'
