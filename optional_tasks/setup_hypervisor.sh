@@ -29,17 +29,29 @@ CRT_SUBJECT="/C=FR/O=Oranization/CN=${COMMON_NAME}/OU=RD/L=${CITY}/ST=${STATE}/e
 
 
 script_dir=$(pwd)
-result=0
+LOG_FILE=/root/.npf-hypervisor.log
+SCRIPT_GOOD=true
 
+function log {
+    local log_line="${1}"
+    local level="${2}"
+
+    echo "${log_line}" >> "${LOG_FILE}"
+    echo "${log_line}"
+
+    if [ "${level}" == "ERROR" ]; then
+        SCRIPT_GOOD=false
+    fi
+}
 echo "#### Installing prerequisites ####"
 
-dnf install -y epel-release || result=1
-dnf install -y policycoreutils-python-utils || result=1
-dnf install -y virt-what net-snmp tar bzip2 || result=1
-dnf install -y qemu-kvm libvirt virt-install bridge-utils libguestfs-tools guestfs-tools cockpit cockpit-machines cockpit-pcp || result=1
+dnf install -y epel-release || log "Failed to install epel release" "ERROR"
+dnf install -y policycoreutils-python-utils || log "Failed to install selinux tools" "ERROR"
+dnf install -y virt-what net-snmp tar bzip2 || log "Failed to install system tools" "ERROR"
+dnf install -y qemu-kvm libvirt virt-install bridge-utils libguestfs-tools guestfs-tools cockpit cockpit-machines cockpit-pcp || log "Failed to install KVM" "ERROR"
 
 # Optional virt-manager + X11 support (does not work in readonly mode)
-dnf install -y virt-manager xorg-x11-xauth || result=1
+dnf install -y virt-manager xorg-x11-xauth || log "Failed to install virt-manager and X11 auth support" "ERROR"
 
 echo "#### System tuning ####"
 # Don't log martian packets, obviously we'll get plenty
@@ -72,32 +84,40 @@ view   systemview    included   .1.3.6.1.4.1.2021.9
 # CPU
 view    systemview    included   .1.3.6.1.4.1.2021.10
 EOF
-sed -i '/^view    systemview    included   .1.3.6.1.2.1.25.1.1$/ r /tmp/snmpd_part.conf' /etc/snmp/snmpd.conf
+sed -i '/^view    systemview    included   .1.3.6.1.2.1.25.1.1$/ r /tmp/snmpd_part.conf' /etc/snmp/snmpd.conf 2>> "${LOG_FILE}" || log "Configuring SNMP failed" "ERROR"
 
 echo "#### Setting up cockpit & performance logging ####"
-systemctl enable pmcd || result=1
-systemctl start pmcd || result=1
-systemctl enable pmlogger || result=1
-systemctl start pmlogger || result=1
-systemctl enable --now cockpit.socket || result=1
+systemctl enable pmcd || log "Failed to enable pmcd" "ERROR"
+systemctl start pmcd || log "Failed to start pmcd" "ERROR"
+systemctl enable pmlogger || log "Failed enable pmlogger" "ERROR"
+systemctl start pmlogger || log "Failed start pmlogger" "ERROR"
+systemctl enable cockpit.socket || log "Failed to enable cockpit" "ERROR"
+systemctl start cockpit.socket || log "Failed to start cockpit" "ERROR"
+
+
+# Actually, we won't allow sudo since ANSSI BP-028 prohibits it (using Defaults noexec in /etc/sudoers)
 # Cockpit sudo must work for admin user
-usermod -aG wheel ${ADMIN_USER} || result=1
-echo 'Defaults:'${ADMIN_USER}' !requiretty' >> /etc/sudoers
+#usermod -aG wheel ${ADMIN_USER} || result=1
+#echo 'Defaults:'${ADMIN_USER}' !requiretty' >> /etc/sudoers
+
+#Let's allow cockpit user root (which is okay since we have pam faillock set)
+sed -i 's/^root/#root/g' /etc/cockpit/disallowed_users 2>> "${LOG_FILE}" || log "Allowing root user for cockpit failed" "ERROR"
+
 
 echo "#### Setup first ethernet interface as bridged to new bridge kvmbr0 ####"
 # ip -br l == ip print brief list of network interfaces
 iface=$(ip -br l | awk '$1 !~ "lo|vir|wl" { print $1; exit }')
 if [ -z ${iface} ]; then
     echo "Failed to get first ethernet interface"
-    result=1
+    exit 1
 fi
 
 # Disable spanning tree so we don't interrupt existing STP infrastructure
-nmcli c add type bridge ifname kvmbr0 con-name kvmbr0 autoconnect yes bridge.stp no || result=1
-nmcli c modify kvmbr0 ipv4.method dhcp || result=1
-nmcli c add type bridge-slave ifname ${iface} master kvmbr0 autoconnect yes || result=1
-nmcli c up kvmbr0 || result=1
-nmcli c del ${iface} || result=1
+nmcli c add type bridge ifname kvmbr0 con-name kvmbr0 autoconnect yes bridge.stp no 2>> "${LOG_FILE}" || log "Creating bridge failed" "ERROR"
+nmcli c modify kvmbr0 ipv4.method dhcp  2>> "${LOG_FILE}" || log "Setting bridge ipv4 DHCP failed" "ERROR"
+nmcli c add type bridge-slave ifname ${iface} master kvmbr0 autoconnect yes 2>> "${LOG_FILE}" || log "Adding bridge slave failed" "ERROR"
+nmcli c up kvmbr0  2>> "${LOG_FILE}" || log "Enabling bridge failed" "ERROR"
+nmcli c del ${iface}  2>> "${LOG_FILE}" || log "Deleting interface ${iface} config failed" "ERROR"
 
 echo "#### Setting up virualization ####"
 cat << 'EOF' > /etc/sysconfig/libvirt-guests
@@ -139,6 +159,9 @@ case "$host" in
 esac
 
 echo "NPF-${NPFSYSTEM}" > /etc/netperfect-release
+
+## Disable sssd
+systemctl disable sssd
 
 
 echo "#### Cleanup system files ####"
