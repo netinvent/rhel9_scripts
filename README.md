@@ -56,6 +56,9 @@ As of today, the python script only uses a single disk. Multi disk support can b
 When anaconda install fails, you have to change the terminal (CTRL+ALT+F2) in order to check file `/tmp/prescript.log`.  
 Using a serial console, you'll have to use ESC+TAB in order to change terminal.
 
+When installing on an existing disk, the script is not capable to unload LVM partitions, hence it may zero the disk, but the kernel will still think the LVM partitions exist.  
+In that case, just reboot and reinstall, since the disk has been emptied, everything will work properly.
+
 ## Other scripts
 
 ### Setup Hypervisor

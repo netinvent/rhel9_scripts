@@ -15,6 +15,11 @@ __build__ = "2024101301"
 # LVM partitioning scheme is
 # | (efi) | boot | lv [data 1| data part n | swap]
 
+# Please note that the following arguments can be superseeded by kernel arguments
+# TARGET, USER_NAME, USER_PASSWORD, ROOT_PASSWORD, HOSTNAME, DISK_PATH
+# You need to specify that kernel argument as NPF_{ARGUMENT_NAME}=value, example
+# append initrd=initrd.img inst.ks=hd:LABEL=MYDISK:/ks.rhel9.cfg NPF_USER_NAME=bob
+
 ## Possible partitionning targets
 # generic: One big root partition
 # web: Generic web server setup
@@ -28,7 +33,7 @@ TARGET = "anssi"
 # Set to 0 to disable
 REDUCE_PHYSICAL_DISK_SPACE = 5
 
-# Enable LVM partitioning
+# Enable LVM partitioning (if using stateless partition profiles, this will be automatically disabled)
 LVM_ENABLED = True
 # LVM volume group name
 VG_NAME = "vg00"
@@ -36,20 +41,19 @@ VG_NAME = "vg00"
 PE_SIZE = 4096
 
 ## Password management
-# If ARE_PASSWORDS_CRYPTED, root and user passwords need to be generated using openssl passwd -6 (or -5)
-# Else, you can use plain text passwords
-ARE_PASSWORDS_CRYPTED = True
+# You can use plaintext password, or set IS_ROOT_PASSWORD_CRYPTED or IS_USER_PASSWORD_CRYPTED
+# In the latter case, you'll need to use a password generated using `openssl passwd -6 SomePassword`
+IS_ROOT_PASSWORD_CRYPTED = True
 # The following password is the output of openssl passwd -6 MySuperSecretPWD123!
-DEFAULT_ROOT_PASSWORD = r"$6$tbqw2foUFoYWayGy$6g13/1NgjNlPvXH7nwRyfg3ROfr6d01MUUbt0I2OubtY/zGHjhn2BveYoo8L.BgGXHNq7jKrTtS5lR8ugirom0"
-DEFAULT_USER_NAME = "myuser"
-# The following password is the output of openssl passwd -6 MySecretPWD123!
-DEFAULT_USER_PASSWORD = r"$6$n4c4LJmfmwTgF80z$bPWqMYIVcMN9cK..MTAIXj.Rp2Q/AzhRd8dK4GXUY7GsVerQD8oP0nds.We.WrYOCX5bw8Yaonef0g6dBZxat."
+ROOT_PASSWORD = r"$6$tbqw2foUFoYWayGy$6g13/1NgjNlPvXH7nwRyfg3ROfr6d01MUUbt0I2OubtY/zGHjhn2BveYoo8L.BgGXHNq7jKrTtS5lR8ugirom0"
 
+USER_NAME = "myuser"
+IS_USER_PASSWORD_CRYPTED = True
+# The following password is the output of openssl passwd -6 MySecretPWD123!
+USER_PASSWORD = r"$6$n4c4LJmfmwTgF80z$bPWqMYIVcMN9cK..MTAIXj.Rp2Q/AzhRd8dK4GXUY7GsVerQD8oP0nds.We.WrYOCX5bw8Yaonef0g6dBZxat."
 
 ## Hostname
-# Hostname used depending on virtual or physical machine
-PHYSICAL_HOSTNAME = "pmv44.npf.local"
-VIRTUAL_HOSTNAME = "vmv44.npf.local"
+HOSTNAME = "machine.npf.local"
 
 ## Package management
 # Add lm-sensros and smartmontools on physical machines
@@ -121,7 +125,7 @@ PARTS_ANSSI = [
 
 import sys
 import os
-from typing import Tuple
+from typing import Tuple, Optional
 import subprocess
 import logging
 from time import sleep
@@ -137,6 +141,38 @@ def dirty_cmd_runner(cmd: str) -> Tuple[int, str]:
     except subprocess.CalledProcessError as exc:
         result = exc.output
         return False, result
+    
+
+def get_kernel_arguments() -> dict:
+    """
+    Retrieve additional kernel arguments
+    """
+    def _get_kernel_argument(argument_name: str) -> Optional[str]:
+        """
+        Retrieve a kernel argument
+        """
+
+        cmd=rf"grep -oi '{argument_name}=\S*' /proc/cmdline | cut -d '=' -f 2"
+        result, output = dirty_cmd_runner(cmd)
+        if result:
+            argument_value = output.split("\n")[0].strip()
+            if argument_value:
+                logger.info(f"Found kernel argument {argument_name}={argument_value}")
+                return argument_value
+        return None
+    
+    argument_list = [
+        "TARGET", "USER_NAME", "USER_PASSWORD", "ROOT_PASSWORD", "HOSTNAME", "DISK_PATH"
+    ]
+
+    kernel_arguments = {}
+
+    for argument in argument_list:
+        argument_name = f"NPF_{argument}"
+        argument_value = _get_kernel_argument(argument_name)
+        if argument_value:
+            kernel_arguments[argument] = argument_value
+    return kernel_arguments
 
 
 def is_gpt_system() -> bool:
@@ -196,7 +232,7 @@ def zero_disk(disk_path: str) -> bool:
     in order to have a custom partition schema
     We'll also wipe partitions and then the partition table
     """
-    cmd = f"dd if=/dev/zero of={disk_path} bs=512 count=1 conv=notrunc && wipefs -a {disk_path}[0-9] -f && wipefs -a {disk_path} -f"
+    cmd = f"dd if=/dev/zero of={disk_path} bs=512 count=1 conv=notrunc; wipefs -a {disk_path}[0-9] -f; wipefs -a {disk_path} -f"
     logger.info(f"Zeroing disk {disk_path}")
     if DEV_MOCK:
         return True
@@ -492,7 +528,7 @@ def prepare_non_kickstart_partitions(partitions_schema: dict) -> bool:
             if not result:
                 logger.error(f"Command {cmd} failed: {output}")
                 return False
-        return result
+        return True
 
     part_number = 1
     for part_index, part_properties in partitions_schema.items():
@@ -622,13 +658,8 @@ def setup_package_lists() -> bool:
         return False
 
 
-def setup_hostname() -> bool:
+def setup_hostname(hostname: str = None) -> bool:
     logger.info("Setting up hostname")
-    if IS_VIRTUAL:
-        hostname = VIRTUAL_HOSTNAME
-    else:
-        hostname = PHYSICAL_HOSTNAME
-
     try:
         with open("/tmp/hostname", "w", encoding="utf-8") as fp:
             fp.write(f"network --hostname={hostname}\n")
@@ -650,12 +681,8 @@ def setup_users() -> bool:
     password MD5 (don't) with openssl passwd -1
     """
     logger.info("Setting up password file")
-    if ARE_PASSWORDS_CRYPTED:
-        is_crypted = "--iscrypted "
-    else:
-        is_crypted = ""
-    root = rf"rootpw {is_crypted}{DEFAULT_ROOT_PASSWORD}"
-    user = rf"user --name {DEFAULT_USER_NAME} {is_crypted}--password={DEFAULT_USER_PASSWORD}"
+    root = rf"rootpw {'--iscrypted ' if IS_ROOT_PASSWORD_CRYPTED else ''}{ROOT_PASSWORD}"
+    user = rf"user --name {USER_NAME} {'--iscrypted ' if IS_USER_PASSWORD_CRYPTED else ''}--password={USER_PASSWORD}"
 
     try:
         with open("/tmp/users", "w", encoding="utf-8") as fp:
@@ -686,10 +713,23 @@ if DEV_MOCK:
     )
 
 TARGET = TARGET.lower()
+DISK_PATH = get_first_disk_path()
+
+# Superseed 
+kernel_arguments = get_kernel_arguments()
+for argument_name, argument_value in kernel_arguments.items():
+    logger.info(f"Superseeding value {argument_name}={argument_value}")
+    # Special case when superseeding passwords
+    if argument_name == "ROOT_PASSWORD":
+        IS_ROOT_PASSWORD_CRYPTED = False
+    if argument_name == "USER_NAME":
+        IS_USER_PASSWORD_CRYPTED = False
+    globals()[argument_name] = argument_value
+
 
 if TARGET in ["stateless", "hv-stateless"] and LVM_ENABLED:
-    logger.error("Stateless machines are not compatible with LVM. Stopping setup")
-    sys.exit(223)
+    logger.info("Stateless machines are not compatible with LVM. Disabling LVM.")
+    LVM_ENABLED = False
 
 PARTS = None
 if TARGET == "hv":
@@ -714,7 +754,7 @@ IS_VIRTUAL, _ = dirty_cmd_runner(
     r'dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|netperfect_vm"'
 )
 IS_GPT = is_gpt_system()
-DISK_PATH = get_first_disk_path()
+
 if not DISK_PATH:
     sys.exit(10)
 if not zero_disk(DISK_PATH):
@@ -752,7 +792,7 @@ logger.info("Partitionning done. Please use '%include /tmp/partitions")
 if not setup_package_lists():
     sys.exit(9)
 
-if not setup_hostname():
+if not setup_hostname(HOSTNAME):
     sys.exit(10)
 
 if not setup_users():

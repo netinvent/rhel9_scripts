@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024101306
+# SCRIPT BUILD 2024101801
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
@@ -60,7 +60,7 @@ function check_internet {
         if [ $? -eq 0 ]; then
             log "FQDN IPv4 echo request to ${host} works."
             return 0
-        else:
+        else
             log "FQDN IPv4 echo request to ${host} failed."
         fi
     done
@@ -75,7 +75,7 @@ function check_internet {
     ip_result=$(ip a)
     route_result=$(ip route)
     resolv=$(cat /etc/resolv.conf)
-    log "Internet check failed. Please find output of diag commands:" "ERROR"
+    log "Internet check failed. Please find output of diag commands:" "NOTICE"
     log "ip a:\n${ip_result}\n\n"
     log "ip route:\n${route_result}\n\n"
     log "resolv.conf content:\n${resolv}\n\n"
@@ -85,9 +85,9 @@ function check_internet {
 
 # NPF-MOD
 if [ ${IS_VIRTUAL} == true ]; then
-    NPF_NAME=VMv4.4
+    NPF_NAME=VMv4.5
 else
-    NPF_NAME=PMv4.4
+    NPF_NAME=PMv4.5
 fi
 cat << EOF > /etc/issue
 NetPerfect $NPF_NAME
@@ -144,7 +144,7 @@ fi
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up disk SMART tooling"
     echo "DEVICESCAN -H -l error -f -C 197+ -U 198+ -t -l selftest -I 194 -n sleep,7,q -s (S/../.././10|L/../../[5]/13)" >> /etc/smartmontools/smartd.conf 
-    systemctl enable --now smartd 2>> "${LOG_FILE}" || log "Failed to start smartd" "ERROR"
+    systemctl enable smartd 2>> "${LOG_FILE}" || log "Failed to start smartd" "ERROR"
 
     log "Setting up smart script for prometheus"
     cat << 'EOF' > /usr/local/bin/smartmon.sh
@@ -594,34 +594,31 @@ sed -i 's/^upgrade_type[[:space:]]*=[[:space:]].*/upgrade_type = security/g' /et
 sed -i 's/^download_updates[[:space:]]*=[[:space:]].*/download_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 sed -i 's/^apply_updates[[:space:]]*=[[:space:]].*/apply_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio,motd/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
-systemctl enable --now dnf-automatic.timer 2>> "${LOG_FILE}" || log "Failed to start dnf-automatic timer" "ERROR"
+systemctl enable dnf-automatic.timer 2>> "${LOG_FILE}" || log "Failed to start dnf-automatic timer" "ERROR"
 
-# Setup tuned profile
-if ! type -p tuned > /dev/null 2>&1; then
-    dnf install -y tuned  2>> "${LOG_FILE}" || log "tuned is missing and cannot be installed" "ERROR"
-fi
-
-systemctl enable --now tuned 2>> "${LOG_FILE}" || log "Failed to start tuned" "ERROR"
+systemctl enable tuned 2>> "${LOG_FILE}" || log "Failed to start tuned" "ERROR"
+# tuned-adm will complain that tuned is not running, but we cannot start tuned in install environment
+# Hence, we will not log these errors. On reboot, the "good" profile will be selected anyway
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up hardware tuned profile"
-    tuned-adm profile npf-eco 2>> "${LOG_FILE}" || log "Failed to setup tuned profile for physical machine" "ERROR"
+    tuned-adm profile npf-eco
 else
     log "Setting up virtual tuned profile"
-    tuned-adm profile virtual-guest 2>> "${LOG_FILE}" || log "Failed to setup tuned profile for virtual machine" "ERROR"
+    tuned-adm profile virtual-guest
 fi
 
 # Enable guest agent on KVM
 if [ ${IS_VIRTUAL} == true ]; then
     log "Setting up Qemu guest agent"
     setsebool -P virt_qemu_ga_read_nonsecurity_files 1 2>> "${LOG_FILE}" || log "Failed to SELinux for qemu virtual machine" "ERROR"
-	  systemctl enable --now qemu-guest-agent 2>> "${LOG_FILE}" || log "Failed to start qumu-guest-agent" "ERROR"
+	  systemctl enable qemu-guest-agent 2>> "${LOG_FILE}" || log "Failed to start qumu-guest-agent" "ERROR"
 fi
 
 # Prometheus support
 check_internet
 if [ $? -eq 0 ]; then
     log "Installing Node exporter"
-    cd /opt
+    cd /opt || log "No /opt directory found"
     [ ! -d /var/lib/node_exporter/textfile_collector ] && mkdir -p /var/lib/node_exporter/textfile_collector
     curl -sSfL https://raw.githubusercontent.com/carlocorradini/node_exporter_installer/main/install.sh | INSTALL_NODE_EXPORTER_SKIP_FIREWALL=true INSTALL_NODE_EXPORTER_EXEC="--collector.logind --collector.interrupts --collector.systemd --collector.processes --collector.textfile.directory=/var/lib/node_exporter/textfile_collector" sh -s - 2>> "${LOG_FILE}" || log "Failed to setup node_exporter" "ERROR"
 else
