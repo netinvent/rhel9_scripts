@@ -1,7 +1,10 @@
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![GitHub Release](https://img.shields.io/github/release/netinvent/rhel9_scripts.svg?label=Latest)](https://github.com/netinvent/rhel9_scripts/releases/latest)
-[![Python linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint-windows.yaml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yaml)
-[![Bash linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint-linux.yaml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/shellcheck.yaml)
+[![Python linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml)
+[![Bash linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/shellcheck.yml)
+
+https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yaml
+https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml
 
 ## Redhat Enterprise Linux / AlmaLinux / RockyLinux anaconda scipts
 
