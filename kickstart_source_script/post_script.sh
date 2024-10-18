@@ -363,9 +363,9 @@ EOF
     log "Setting up iTCO_wdt watchdog"
     echo "iTCO_wdt" > /etc/modules-load.d/10-watchdog.conf
 
-    sensors-detect --auto | grep "no driver for ITE 8613E" > /dev/null 2>&1
+    sensors-detect --auto | grep "no driver for ITE IT8613E" > /dev/null 2>&1
     if [ $? -eq 0 ]; then
-        log "Setting up partial ITE 8613E support"
+        log "Setting up partial ITE 8613E support for NP0F6V2 hardware"
         echo "it87" > /etc/modules-load.d/20-it87.conf
         echo "options it87 force_id=0x8620" > /etc/modprobe.d/it87.conf
     fi
