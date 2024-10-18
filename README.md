@@ -3,8 +3,6 @@
 [![Python linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml)
 [![Bash linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/shellcheck.yml)
 
-https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yaml
-https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml
 
 ## Redhat Enterprise Linux / AlmaLinux / RockyLinux anaconda scipts
 
