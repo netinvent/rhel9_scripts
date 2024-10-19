@@ -210,11 +210,11 @@ def get_first_disk_path() -> list:
     """
     if DEV_MOCK:
         return "/dev/vdx"
-    # -I only include disk types 8 = hard disk, 259 = nvme disk
+    # -I only include disk types 8 = hard disk, 252 = vdisk, 259 = nvme disk
     # -ndp -n no headers, -d only devices (no partitions), -p show full path
     # --output NAME,TYPE,HOTPLUG only output name and type
     # awk will filter by non hotplug devices and return a line per disk
-    cmd = r"lsblk -I 8,259 -ndp --output HOTPLUG,NAME | awk '{ if ($1 == 0) { print $2 }}'"
+    cmd = r"lsblk -I 8,252,259 -ndp --output HOTPLUG,NAME | awk '{ if ($1 == 0) { print $2 }}'"
     result, output = dirty_cmd_runner(cmd)
     if result:
         disk_path = output.split("\n")[0].strip()
