@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024101801
+# SCRIPT BUILD 2024102201
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
@@ -49,19 +49,19 @@ function check_internet {
     fqdn_host="one.one.one.one kernel.org github.com"
     ip_hosts="2606:4700:4700::1001 8.8.8.8 9.9.9.9"
     for host in ${fqdn_host[@]}; do
-        ping -6 -c2 "${host}" > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            log "FQDN IPv6 echo request to ${host} works."
-            return 0
-        else
-            log "FQDN IPv6 echo request to ${host} failed."
-        fi
         ping -4 -c2 "${host}" > /dev/null 2>&1
         if [ $? -eq 0 ]; then
             log "FQDN IPv4 echo request to ${host} works."
             return 0
         else
             log "FQDN IPv4 echo request to ${host} failed."
+        fi
+        ping -6 -c2 "${host}" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            log "FQDN IPv6 echo request to ${host} works."
+            return 0
+        else
+            log "FQDN IPv6 echo request to ${host} failed."
         fi
     done
     log "Looks like we cannot access internet via hostnames. Let's try IPs"
