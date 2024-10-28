@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024101801
+# SCRIPT BUILD 2024102801
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
@@ -9,6 +9,9 @@ function log {
     local log_line="${1}"
     local level="${2}"
 
+    if [ "${level}" != "" ]; then
+        log_line="${level}: ${log_line}"
+    fi
     echo "${log_line}" >> "${LOG_FILE}"
     echo "${log_line}"
 
