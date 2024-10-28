@@ -61,7 +61,7 @@ sed -i 's:dirs\(.*\)/var/log:#/dirs\1/var/log # Configured in /etc/statetab to b
 echo "dirs /var/log/tuned" >> /etc/rwtab.d/tuned
 echo "files /etc/issue" >> /etc/rwtab.d/issue
 echo "dirs /var/lib/rsyslog" >> /etc/rwtab.d/rsyslog
-echo "dirs /var/lib/node_exporter/textfile_collector"  > /etc/rwtab.d/node_exporter
+echo "dirs /var/lib/node_exporter"  > /etc/rwtab.d/node_exporter
 echo "dirs /var/lib/pcp" >> /etc/rwtab.d/cockpit        # cockpit
 echo "dirs /var/lib/dnf" >> /etc/rwtab.d/dnf            # cockpit packagekit (dnf cache)
 echo "dirs /var/cache" >> /etc/rwtab.d/dnf              # cockpit packagekit (dnf cache)
