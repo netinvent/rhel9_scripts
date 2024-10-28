@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## Readonly setup script 2024013001 for RHEL9
+## Readonly setup script 2024102801 for RHEL9
 
 # Requirements:
 # RHEL9 installed
@@ -31,8 +31,8 @@ sed -i 's/READONLY=no/READONLY=yes/g' /etc/sysconfig/readonly-root
 # Thos should already be set by the VMv4 kickstart file
 sed -i 's/STATE_LABEL=stateless-state/STATE_LABEL=STATEFULRW/g' /etc/sysconfig/readonly-root
 
-rm -f /etc/statetab.d/{snmp,nm,qemu,cockpit,log,ztl}
-rm -f /etc/rwtab.d/{tuned,issue,rsyslog,node_exporter,cockpit,ztl,haproxy}
+rm -f /etc/statetab.d/{snmp,nm,qemu,cockpit,rsyslog,prometheus,node_exporter,ztl}
+rm -f /etc/rwtab.d/{tuned,issue,ztl,haproxy,ztl}
 # statetab will be persistent volumes stored on a partition which label must match the
 # STATE_LABEL= directive in /etc/sysconfig/readonly-root (defaults to stateless-state)
 # Those dirs are stateful accross reboots
@@ -43,13 +43,20 @@ echo "/etc/snmp" >> /etc/statetab.d/snmp
 echo "/etc/NetworkManager/system-connections" >> /etc/statetab.d/nm
 echo "/etc/prometheus" >> /etc/statetab.d/prometheus
 echo "/var/lib/prometheus" >> /etc/statetab.d/prometheus
+echo "/var/lib/node_exporter"  >> /etc/statetab.d/node_exporter
+echo "/var/lib/rsyslog" >> /etc/statetab.d/rsyslog
+echo "/var/lib/pcp" >> /etc/statetab.d/cockpit        # cockpit
+echo "/etc/pcp" >> /etc/statetab.d/cockpit            # cockpit
+echo "/var/lib/dnf" >> /etc/statetab.d/dnf            # cockpit packagekit (dnf cache)
+echo "/var/cache" >> /etc/statetab.d/dnf              # cockpit packagekit (dnf cache)
 
 if [ "${target}" == "hv" ]; then
     echo "Configuring specific HV Stateless"
     echo "/var/lib/libvirt" >> /etc/statetab.d/qemu
     echo "/etc/libvirt" >> /etc/statetab.d/qemu
     # For DNF to work we'd need /var/cache/dnf but obviously we won't
-    echo "/etc/pcp" >> /etc/statetab.d/cockpit   # cockpit
+    
+    
 fi
 
 # Keep logs persistent too
@@ -60,11 +67,6 @@ sed -i 's:dirs\(.*\)/var/log:#/dirs\1/var/log # Configured in /etc/statetab to b
 # Size is 1/2 of system RAM
 echo "dirs /var/log/tuned" >> /etc/rwtab.d/tuned
 echo "files /etc/issue" >> /etc/rwtab.d/issue
-echo "dirs /var/lib/rsyslog" >> /etc/rwtab.d/rsyslog
-echo "dirs /var/lib/node_exporter"  > /etc/rwtab.d/node_exporter
-echo "dirs /var/lib/pcp" >> /etc/rwtab.d/cockpit        # cockpit
-echo "dirs /var/lib/dnf" >> /etc/rwtab.d/dnf            # cockpit packagekit (dnf cache)
-echo "dirs /var/cache" >> /etc/rwtab.d/dnf              # cockpit packagekit (dnf cache)
 
 if [ "${target}" == "ztl" ]; then
     echo "Configuring specific ZTL stateless"
@@ -73,11 +75,7 @@ if [ "${target}" == "ztl" ]; then
     echo "/etc/firewalld/zones" >> /etc/statetab.d/ztl
     echo "/var/ztl" >> /etc/statetab.d/ztl
     echo "/etc/systemd/system" >> /etc/statetab.d/ztl
-
     echo "dirs /var/ztl_upgrade" >> /etc/rwtab.d/ztl
-    echo "dirs /etc/wireguard" >> /etc/rwtab.d/ztl
-    echo "files /etc/issue" >> /etc/rwtab.d/ztl
-    echo "dirs /var/lib/haproxy" >> /etc/rwtab.d/haproxy
 fi
 
 # Optional for xauth support
@@ -111,6 +109,9 @@ grub2-mkconfig -o /boot/grub2/grub.cfg
 #sed -i 's/vfat\(\s*\)/vfat\1ro,/g' /etc/fstab
 
 
+# The following patch is only necessary for readonly-root < 10.11.6 that comes with RHEL < 9.4
+# Let's not execute it anymore
+patch_readonly_root() {
 # Fix for statetab file not supporting space in dir nam
 # See our PR at https://github.com/fedora-sysv/initscripts/pull/471
 # Patch created via  diff -auw /usr/libexec/readonly-root /tmp/readonly-root > /tmp/readonly-root.npf.patch
@@ -148,7 +149,7 @@ cat << 'EOF' > /tmp/readonly-root.npf.patch
 
 EOF
 patch -l /usr/libexec/readonly-root < /tmp/readonly-root.npf.patch
-
+}
 
 
 ## Post install
