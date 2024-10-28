@@ -8,11 +8,10 @@
 IMAGE_DIR=/var/lib/libvirt/images
 
 # VM Configuration
-VCPUS=8
 VCPUS=6
 RAM=10240
-DISK=60G
-OS_VARIANT=freebsd13.1  # osinfo-query os | grep freebsd
+DISK=120G
+OS_VARIANT=freebsd14.0  # osinfo-query os | grep freebsd
 
 function usage {
     echo "$0 <tenant> <opnsense_version> <pci_devs>"
