@@ -162,7 +162,7 @@ def get_kernel_arguments() -> dict:
         result, output = dirty_cmd_runner(cmd)
         if result:
             argument_value = output.split("\n")[0].strip()
-            if argument_value:
+            if argument_value is not "":
                 logger.info(f"Found kernel argument {argument_name}={argument_value}")
                 return argument_value
         return None
@@ -664,7 +664,7 @@ def setup_package_lists() -> bool:
         return False
 
 
-def setup_network(network: str = "dhcp") -> bool:
+def setup_network(network: str) -> bool:
     logger.info("Setting up network")
     try:
         ip, mask, gw, ns = network.split(':')
@@ -673,14 +673,24 @@ def setup_network(network: str = "dhcp") -> bool:
             ip, mask, gw = network.split(':')
             ns = gw
         except Exception:
-            ip, mask, gw, ns = None
+            ip = mask = gw = ns = None
+    
+    if ip and mask and gw and ns:
+        logger.info(f"Configuring network with {ip}/{mask} gw {gw} ns {ns}")
+    elif network == "dhcp":
+        logger.info(f"Configuring network with dhcp")
+    else:
+        logger.info(f"Not configuring network")
     
     try:
-        with open("/tmp/hostname", "w", encoding="utf-8") as fp:
+        with open("/tmp/network", "w", encoding="utf-8") as fp:
             if ip and mask and gw and ns:
-                fp.write(f"network --bootproto static --ip {ip} --netmask {mask} --gateway {gw} --nameserver {ns} --activate --onboot=yes")
+                fp.write(f"network --bootproto static --ip {ip} --netmask {mask} --gateway {gw} --nameserver {ns} --activate --onboot=yes\n")
             elif network == "dhcp":
-                fp.write(f"network  --bootproto=dhcp --activate --onboot=yes")
+                fp.write(f"network  --bootproto=dhcp --activate --onboot=yes\n")
+            else:
+                fp.write("\n")
+        return True
     except OSError as exc:
         logger.error(f"Cannot create /tmp/network file: {exc}")
         return False
@@ -794,14 +804,22 @@ IS_VIRTUAL, _ = dirty_cmd_runner(
 IS_GPT = is_gpt_system()
 
 if not DISK_PATH:
-    sys.exit(1)
+    errno=1
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 if not zero_disk(DISK_PATH):
-    sys.exit(2)
+    errno=2
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 if not init_disk(DISK_PATH):
-    sys.exit(3)
+    errno=3
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 disk_space_mb = get_disk_size_mb(DISK_PATH)
 if not disk_space_mb:
-    sys.exit(4)
+    errno=4
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 USABLE_DISK_SPACE = disk_space_mb - 2  # keep 1KiB empty at beginning and 1MiB at end
 if not IS_VIRTUAL and REDUCE_PHYSICAL_DISK_SPACE:
     # Let's reserve 5% of disk space on physical machine
@@ -815,28 +833,46 @@ if not IS_VIRTUAL and REDUCE_PHYSICAL_DISK_SPACE:
 
 partitions_schema = get_partition_schema(PARTS)
 if not partitions_schema:
-    sys.exit(5)
+    errno=5
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 if not validate_partition_schema(partitions_schema):
-    sys.exit(6)
+    errno=6
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 if not execute_parted_commands(partitions_schema):
-    sys.exit(7)
+    errno=7
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 if not prepare_non_kickstart_partitions(partitions_schema):
-    sys.exit(8)
+    errno=8
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 if not write_kickstart_partitions_file(partitions_schema):
-    sys.exit(9)
+    errno=9
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 
 logger.info("Partitionning done. Please use '%include /tmp/partitions")
 
 if not setup_package_lists():
-    sys.exit(10)
+    errno=10
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 
 if not setup_hostname(HOSTNAME):
-    sys.exit(20)
+    errno=20
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 
 if not setup_network(NETWORK):
-    sys.exit(21)
+    errno=21
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 
 if not setup_users():
-    sys.exit(22)
+    errno=22
+    logger.critical(f"Error {errno}")
+    sys.exit(errno)
 
 

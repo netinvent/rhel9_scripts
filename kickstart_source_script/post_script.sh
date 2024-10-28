@@ -52,19 +52,19 @@ function check_internet {
     fqdn_host="one.one.one.one kernel.org github.com"
     ip_hosts="2606:4700:4700::1001 8.8.8.8 9.9.9.9"
     for host in ${fqdn_host[@]}; do
-        ping -6 -c2 "${host}" > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            log "FQDN IPv6 echo request to ${host} works."
-            return 0
-        else
-            log "FQDN IPv6 echo request to ${host} failed."
-        fi
         ping -4 -c2 "${host}" > /dev/null 2>&1
         if [ $? -eq 0 ]; then
             log "FQDN IPv4 echo request to ${host} works."
             return 0
         else
             log "FQDN IPv4 echo request to ${host} failed."
+        fi
+        ping -6 -c2 "${host}" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            log "FQDN IPv6 echo request to ${host} works."
+            return 0
+        else
+            log "FQDN IPv6 echo request to ${host} failed."
         fi
     done
     log "Looks like we cannot access internet via hostnames. Let's try IPs"
@@ -596,7 +596,7 @@ systemctl disable dnf-makecache.timer 2>> "${LOG_FILE}" || log "Failed to disabl
 sed -i 's/^upgrade_type[[:space:]]*=[[:space:]].*/upgrade_type = security/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 sed -i 's/^download_updates[[:space:]]*=[[:space:]].*/download_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 sed -i 's/^apply_updates[[:space:]]*=[[:space:]].*/apply_updates = yes/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
-sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio,motd/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
+sed -i 's/^emit_via[[:space:]]*=[[:space:]].*/emit_via = stdio/g' /etc/dnf/automatic.conf 2>> "${LOG_FILE}" || log "Failed to sed /etc/dnf/automatic.conf" "ERROR"
 systemctl enable dnf-automatic.timer 2>> "${LOG_FILE}" || log "Failed to start dnf-automatic timer" "ERROR"
 
 systemctl enable tuned 2>> "${LOG_FILE}" || log "Failed to start tuned" "ERROR"
