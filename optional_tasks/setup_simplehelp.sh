@@ -52,7 +52,7 @@ sleep 10
 echo "Is simplegateway running: "
 systemctl is-active simplegateway 2>> "${LOG_FILE}" || log "Simplegateway is not running" "ERROR"
 
-if [ $SCRIPT_GOOD == false ]; then
+if [ "${SCRIPT_GOOD}" == false ]; then
     echo "#### WARNING Installation FAILED ####"
     exit 1
 else

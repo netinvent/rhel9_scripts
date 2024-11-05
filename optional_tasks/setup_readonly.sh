@@ -175,7 +175,7 @@ EOF
 }
 
 
-RHEL_VERSION=$(cat /etc/os-release | grep VERSION_ID | cut -d'"' -f2)
+RHEL_VERSION=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
 if [ "${RHEL_VERSION}" == "9.0" ] || [ "${RHEL_VERSION}" == "9.1" ] || [ "${RHEL_VERSION}" == "9.2" ] || [ "${RHEL_VERSION}" == "9.3" ]; then
     patch_readonly_root
 fi
@@ -189,7 +189,7 @@ fi
 ln -s /run/NetworkManager/resolv.conf /etc/resolv.conf || log "Cannot link /run/NetworkManager/resolv.conf to /etc/resolv.conf" "ERROR"
 
 
-if [ $SCRIPT_GOOD == false ]; then
+if [ "${SCRIPT_GOOD}" == false ]; then
     echo "#### WARNING Installation FAILED ####"
     exit 1
 else

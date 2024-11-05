@@ -194,7 +194,7 @@ echo "#### Cleanup system files ####"
 /bin/rm -rf /var/lib/authselect/backups/*
 #/bin/rm -rf /var/log/anaconda
 
-if [ $SCRIPT_GOOD == false ]; then
+if [ "${SCRIPT_GOOD}" == false ]; then
     echo "#### WARNING Installation FAILED ####"
     exit 1
 else
