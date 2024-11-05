@@ -13,5 +13,5 @@ jobs:
         # note: Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?. [SC2181]
         env:
           SHELLCHECK_OPTS: -e SC2181 -e SC2068
-        with:
-          scandir: './kickstart_source_script ./optional_tasks'
+        #with:
+          #scandir: './kickstart_source_script'
