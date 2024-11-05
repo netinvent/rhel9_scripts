@@ -79,6 +79,10 @@ Download and instlal OPNSense firewall and passthrough 2 PCI NICs
 
 Transform a RHEL 9 machine into readonly, especially if hypervisor exists
 
+### Setup Prometheus
+
+Setup and run prometheus, including blackbox_exporter, ipmi_exporter and snmp_exporter
+
 ### Setup simplehelp
 
 Setup simplehelp service, compatible with readonly linux
