@@ -228,7 +228,7 @@ chown -R "${USERNAME}:${USERNAME}" /var/lib/prometheus || log "Failed to change 
 
 CURRENT_IP=$(hostname -I | awk '{ print $1 }')
 log "Setup ${REPO} service with default addr ${CURRENT_IP} as external url"
-cat << "EOF" > /etc/systemd/system/${REPO}.service
+cat << EOF > /etc/systemd/system/${REPO}.service
 [Unit]
 Description=Prometheus Time Series Collection and Processing Server
 Wants=network-online.target
