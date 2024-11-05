@@ -114,7 +114,7 @@ PARTS_WEB = [
 PARTS_ANSSI = [
     {"size": 5120, "fs": "xfs", "mountpoint": "/"},
     {"size": 5120, "fs": "xfs", "mountpoint": "/usr", "fsoptions": "nodev"},
-    {"size": 1024, "fs": "xfs", "mountpoint": "/opt", "fsoptions": "nodev,nosuid"},
+    {"size": 3072, "fs": "xfs", "mountpoint": "/opt", "fsoptions": "nodev,nosuid"},
     {"size": 10240, "fs": "xfs", "mountpoint": "/home", "fsoptions": "nodev"},
     # {"size": 40960 , "fs": "xfs", "mountpoint": "/srv", "fsoptions": "nodev,nosuid"},        # When FTP/SFTP server is used
     {"size": 5120, "fs": "xfs", "mountpoint": "/tmp", "fsoptions": "nodev,nosuid,noexec"},
