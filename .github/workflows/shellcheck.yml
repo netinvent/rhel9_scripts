@@ -14,4 +14,4 @@ jobs:
         env:
           SHELLCHECK_OPTS: -e SC2181 -e SC2068
         with:
-          scandir: './kickstart_source_script'
+          scandir: './kickstart_source_script ./optional_tasks'
