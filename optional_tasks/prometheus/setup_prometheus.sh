@@ -191,7 +191,7 @@ enable_service() {
 
 
 log "Setup pre-requisites for prometheus"
-dnf install -y tar freeipmi || log "Failed to install prerequisites" "ERROR"
+dnf install -y tar freeipmi net-snmp-utils || log "Failed to install prerequisites" "ERROR"
 
 log "Creating prometheus user"
 id -u "${USERNAME}" > /dev/null 2>&1 || useradd --no-create-home --system --shell /usr/sbin/nologin "${USERNAME}" || log "Failed to create user ${USERNAME}" "ERROR"
