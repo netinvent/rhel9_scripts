@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## Hypervisor Installer 2024102801 for RHEL9
+## Hypervisor Installer 2024110501 for RHEL9
 
 # Requirements:
 # RHEL9 installed with NPF VMv4 profile incl. node exporter
@@ -28,7 +28,6 @@ TARGET_DIR=/etc/ssl/certs
 CRT_SUBJECT="/C=FR/O=Oranization/CN=${COMMON_NAME}/OU=RD/L=${CITY}/ST=${STATE}/emailAddress=${EMAIL}"
 
 
-script_dir=$(pwd)
 LOG_FILE=/root/.npf-hypervisor.log
 SCRIPT_GOOD=true
 
@@ -74,8 +73,8 @@ echo "#### Setting up system certificate ####"
 
 [ ! -d "${TARGET_DIR}" ] && mkdir "${TARGET_DIR}"
 
-openssl req -nodes -new -x509 -days 7300 -newkey rsa:4096 -keyout ${CERT_DIR}/private/${COMMON_NAME// /_}.key -subj "${CRT_SUBJECT}" -out ${CERT_DIR}/certs/${COMMON_NAME// /_}.crt  || log "Failed to generate local cert" "ERROR"
-cat ${CERT_DIR}/private/${COMMON_NAME// /_}.key ${CERT_DIR}/certs/${COMMON_NAME// /_}.crt > ${TARGET_DIR}/${COMMON_NAME// /_}.pem || log "Failed to concat local cert" "ERROR"
+openssl req -nodes -new -x509 -days 7300 -newkey rsa:4096 -keyout "${CERT_DIR}/private/${COMMON_NAME// /_}.key" -subj "${CRT_SUBJECT}" -out "${CERT_DIR}/certs/${COMMON_NAME// /_}.crt"  || log "Failed to generate local cert" "ERROR"
+cat "${CERT_DIR}/private/${COMMON_NAME// /_}.key" "${CERT_DIR}/certs/${COMMON_NAME// /_}.crt" > "${TARGET_DIR}/${COMMON_NAME// /_}.pem" || log "Failed to concat local cert" "ERROR"
 
 echo "#### Setup SNMP ####"
 
@@ -100,7 +99,7 @@ sed -i '/^view    systemview    included   .1.3.6.1.2.1.25.1.1$/ r /tmp/snmpd_pa
 echo "#### Setting up cockpit & performance logging ####"
 systemctl enable pmcd || log "Failed to enable pmcd" "ERROR"
 systemctl start pmcd || log "Failed to start pmcd" "ERROR"
-systemctl enable pmlogger || log "Failed enable pmlogger" "ERROR"
+systemctl enabgle pmlogger || log "Failed enable pmlogger" "ERROR"
 systemctl start pmlogger || log "Failed start pmlogger" "ERROR"
 systemctl enable cockpit.socket || log "Failed to enable cockpit" "ERROR"
 systemctl start cockpit.socket || log "Failed to start cockpit" "ERROR"
@@ -118,16 +117,16 @@ sed -i 's/^root/#root/g' /etc/cockpit/disallowed-users 2>> "${LOG_FILE}" || log 
 echo "#### Setup first ethernet interface as bridged to new bridge kvmbr0 ####"
 # ip -br l == ip print brief list of network interfaces
 iface=$(ip -br l | awk '$1 !~ "lo|vir|wl" { print $1; exit }')
-if [ -z ${iface} ]; then
+if [ -z "${iface}" ]; then
     log_quit "Failed to get first ethernet interface" "ERROR"
 fi
 
 # Disable spanning tree so we don't interrupt existing STP infrastructure
 nmcli c add type bridge ifname kvmbr0 con-name kvmbr0 autoconnect yes bridge.stp no 2>> "${LOG_FILE}" || log "Creating bridge failed" "ERROR"
 nmcli c modify kvmbr0 ipv4.method auto 2>> "${LOG_FILE}" || log "Setting bridge ipv4 DHCP failed" "ERROR"
-nmcli c add type bridge-slave ifname ${iface} master kvmbr0 autoconnect yes 2>> "${LOG_FILE}" || log "Adding bridge slave failed" "ERROR"
+nmcli c add type bridge-slave ifname "${iface}" master kvmbr0 autoconnect yes 2>> "${LOG_FILE}" || log "Adding bridge slave failed" "ERROR"
 nmcli c up kvmbr0  2>> "${LOG_FILE}" || log "Enabling bridge failed" "ERROR"
-nmcli c del ${iface}  2>> "${LOG_FILE}" || log "Deleting interface ${iface} config failed" "ERROR"
+nmcli c del "${iface}"  2>> "${LOG_FILE}" || log "Deleting interface ${iface} config failed" "ERROR"
 
 echo "#### Setting up virualization ####"
 cat << 'EOF' > /etc/sysconfig/libvirt-guests
