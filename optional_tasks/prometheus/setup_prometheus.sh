@@ -135,7 +135,7 @@ copy_binaries() {
             old_binary="${binary}_$(date +%Y-%m-%d-%H-%M-%S).bak"
             log "Creating backup of ${binary} to ${old_binary}"
             if mv "${prefix}/${binary}" "${prefix}/${old_binary}"; then
-                cp "${binary}" ${prefix} || log "Failed to copy ${binary} to ${prefix}" "ERROR"
+                cp "${binary}" "${prefix}" || log "Failed to copy ${binary} to ${prefix}" "ERROR"
                 chown "${USERNAME}:${USERNAME}" "${prefix}/${binary}" || log "Failed to change ownership to ${USERNAME} on binary ${prefix}/${binary}" "ERROR"
                 chmod 770 "${prefix}/${binary}" || log "Failed to change permissions on binary ${prefix}/${binary}" "ERROR"
                 semanage fcontext -a -t bin_t "${prefix}/${binary}" || log "Failed to set selinux context for binary ${prefix}/${binary}" "ERROR"
@@ -174,7 +174,7 @@ copy_opt_files() {
             src_file="${file}"
         fi
         target_file="${target_dir}/$(basename "${file}")"
-        if [ -d ${target_file} ]; then
+        if [ -d "${target_file}" ]; then
             log "Target file ${target_file} eixsts. Skipping copy"
             continue
         fi
@@ -377,7 +377,7 @@ LAST_VERSION=$(get_latest_git_release "${ORG}" "${REPO}")
 ARCHIVE_NAME=$(get_git_archive_name "${ORG}" "${REPO}" "${BINARY_ARCH}")
 DOWNLOAD_LINK=$(get_git_download_link "${ORG}" "${REPO}" "${BINARY_ARCH}")
 
-OPT_FILES=(/opt/install/${ARCHIVE_NAME%%.tar.gz}/snmp.yml)
+OPT_FILES=("/opt/install/${ARCHIVE_NAME%%.tar.gz}/snmp.yml")
 
 log "Installing latest ${REPO} release ${LAST_VERSION}"
 goto_install_dir
