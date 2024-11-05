@@ -138,8 +138,8 @@ patch_readonly_root() {
 # Fix for statetab file not supporting space in dir nam
 # See our PR at https://github.com/fedora-sysv/initscripts/pull/471
 # Patch created via  diff -auw /usr/libexec/readonly-root /tmp/readonly-root > /tmp/readonly-root.npf.patch
-dnf install -y patch
-cat << 'EOF' > /tmp/readonly-root.npf.patch
+    dnf install -y patch
+    cat << 'EOF' > /tmp/readonly-root.npf.patch
 --- /usr/libexec/readonly-root  2022-08-24 10:42:13.000000000 +0200
 +++ /tmp/readonly-root  2024-01-23 13:20:36.167603560 +0100
 @@ -1,4 +1,4 @@
@@ -171,14 +171,21 @@ cat << 'EOF' > /tmp/readonly-root.npf.patch
         fi
 
 EOF
-patch -l /usr/libexec/readonly-root < /tmp/readonly-root.npf.patch
+    patch -l /usr/libexec/readonly-root < /tmp/readonly-root.npf.patch
 }
 
+
+RHEL_VERSION=$(cat /etc/os-release | grep VERSION_ID | cut -d'"' -f2)
+if [ "${RHEL_VERSION}" == "9.0" ] || [ "${RHEL_VERSION}" == "9.1" ] || [ "${RHEL_VERSION}" == "9.2" ] || [ "${RHEL_VERSION}" == "9.3" ]; then
+    patch_readonly_root
+fi
 
 ## Post install
 # Remove /etc/resolv.conf file since we don't want it in our image
 # See man NetworkManager.conf rc-manager for more info about this
-[ -f /etc/resolv.conf ] && rm -f /etc/resolv.conf || log "Cannot remove /etc/resolv.conf" "ERROR"
+if [ -f /etc/resolv.conf ]; then
+    rm -f /etc/resolv.conf || log "Cannot remove /etc/resolv.conf" "ERROR"
+fi
 ln -s /run/NetworkManager/resolv.conf /etc/resolv.conf || log "Cannot link /run/NetworkManager/resolv.conf to /etc/resolv.conf" "ERROR"
 
 

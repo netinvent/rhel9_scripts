@@ -33,7 +33,7 @@ function log_quit {
     exit 1
 }
 
-cd /opt
+cd /opt || log_quit "Cannot change to /opt"
 curl --output service.tar "${SIMPLEHELP_URL}" || log_quit "Cannot download service.tar"
 tar -xf service.tar || log_quit "Cannot extract service.tar"
 ./Remote\ Access-linux64-offline /S /NAME=AUTODETECT /HOST="${HOST}"
@@ -52,7 +52,7 @@ sleep 10
 echo "Is simplegateway running: "
 systemctl is-active simplegateway 2>> "${LOG_FILE}" || log "Simplegateway is not running" "ERROR"
 
--if [ $SCRIPT_GOOD == false ]; then
+if [ $SCRIPT_GOOD == false ]; then
     echo "#### WARNING Installation FAILED ####"
     exit 1
 else
