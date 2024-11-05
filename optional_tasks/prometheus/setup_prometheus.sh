@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024110501
+# SCRIPT BUILD 2024110502
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
 
-read -p "UPGRADE (Y/N): " UPGRADE
+read -r -p "UPGRADE (Y/N): " UPGRADE
 
 if [ "${UPGRADE}" == "Y" ] || [ "${UPGRADE}" == "y" ]; then
     UPGRADE=true
 else
     UPGRADE=false
-    read -p "PROMETHEUS TENANT: " tenant
-    read -p "PROMETHEUS TENANT API PASSWORD: " tenant_api_password
+    read -r -p "PROMETHEUS TENANT: " tenant
+    read -r -p "PROMETHEUS TENANT API PASSWORD: " tenant_api_password
 fi
 
 export USERNAME=prometheus
@@ -87,10 +87,10 @@ start_service() {
     local service="${1}"
 
     log "Checking service status for ${service}"
-    if ! systemctl is-active ${service} > /dev/null 2>&1; then
+    if ! systemctl is-active "${service}" > /dev/null 2>&1; then
         log "${service} is currently not active, stopping it"
         systemctl daemon-reload || log "Failed to reload systemctl daemon" "ERROR"
-        systemctl start ${service} || log "Failed to stop ${service}" "ERROR"
+        systemctl start "${service}" || log "Failed to stop ${service}" "ERROR"
     else
         log "${service} is currently active, no need to start it"
     fi
@@ -100,9 +100,9 @@ stop_service() {
     local service="${1}"
 
     log "Checking service status for ${service}"
-    if systemctl is-active ${service} > /dev/null 2>&1; then
+    if systemctl is-active "${service}" > /dev/null 2>&1; then
         log "${service} is currently active, stopping it"
-        systemctl stop ${service} || log "Failed to stop ${service}" "ERROR"
+        systemctl stop "${service}" || log "Failed to stop ${service}" "ERROR"
     else
         log "${service} is currently not active, no need to stop it"
     fi
@@ -112,6 +112,7 @@ get_version() {
     local binary="${1}"
 
     version=$(${binary} --version 2>&1 | awk '{ print $2 }')
+    log "Installed ${binary} version\n:${version}"
 }
 
 goto_install_dir() {
@@ -214,7 +215,10 @@ goto_install_dir
 curl -OL "${DOWNLOAD_LINK}" || log "Failed to download ${REPO}" "ERROR"
 tar xvf "${ARCHIVE_NAME}" || log "Failed to extract ${REPO}" "ERROR"
 cd "${ARCHIVE_NAME%%.tar.gz}" || log "Failed to change directory to ${REPO}" "ERROR"
-[ "${UPGRADE}" == true ] && stop_service "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    get_version "${REPO}"
+    stop_service "${REPO}"
+fi
 copy_binaries /usr/local/bin "${BINARIES[@]}"
 make_dir /etc/prometheus/conf.d
 chown -R "${USERNAME}:${USERNAME}" /etc/prometheus || log "Failed to change ownership of /etc/prometheus" "ERROR"
@@ -222,7 +226,7 @@ chown -R "${USERNAME}:${USERNAME}" /etc/prometheus || log "Failed to change owne
 make_dir /var/lib/prometheus
 chown -R "${USERNAME}:${USERNAME}" /var/lib/prometheus || log "Failed to change ownership of /var/lib/prometheus" "ERROR"
 
-CURRENT_ip=$(hostname -I | awk '{ print $1 }')
+CURRENT_IP=$(hostname -I | awk '{ print $1 }')
 log "Setup ${REPO} service with default addr ${CURRENT_IP} as external url"
 cat << "EOF" > /etc/systemd/system/${REPO}.service
 [Unit]
@@ -247,12 +251,16 @@ EOF
 [ $? -ne 0 ] && log "Failed to create ${REPO} service" "ERROR"
 
 conf_firewall "${FIREWALL_PORTS[@]}"
-copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
 
-sed -i "s/### TENANT ###/${tenant}/g" /etc/prometheus/prometheus.yml || log "Failed to replace tenant in prometheus config" "ERROR"
-sed -i "s/### TENANT_API_PASSWORD ###/${tenant_api_password}/g" /etc/prometheus/prometheus.yml || log "Failed to replace tenant api password in prometheus config" "ERROR"
+get_version "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    start_service "${REPO}"
+else
+    copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
+    sed -i "s/### TENANT ###/${tenant}/g" /etc/prometheus/prometheus.yml || log "Failed to replace tenant in prometheus config" "ERROR"
+    sed -i "s/### TENANT_API_PASSWORD ###/${tenant_api_password}/g" /etc/prometheus/prometheus.yml || log "Failed to replace tenant api password in prometheus config" "ERROR"
 
-[ "${UPGRADE}" == true ] && start_service "${REPO}"
+fi
 enable_service "${REPO}"
 
 #### IPMI EXPORTER
@@ -272,7 +280,10 @@ goto_install_dir
 curl -OL "${DOWNLOAD_LINK}" || log "Failed to download ${REPO}" "ERROR"
 tar xvf "${ARCHIVE_NAME}" || log "Failed to extract ${REPO}" "ERROR"
 cd "${ARCHIVE_NAME%%.tar.gz}" || log "Failed to change directory to ${REPO}" "ERROR"
-[ "${UPGRADE}" == true ] && stop_service "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    get_version "${REPO}"
+    stop_service "${REPO}"
+fi
 copy_binaries /usr/local/bin "${BINARIES[@]}"
 
 log "Setup ${REPO} service"
@@ -291,8 +302,12 @@ WantedBy=multi-user.target
 EOF
 [ $? -ne 0 ] && log "Failed to create ${REPO} service" "ERROR"
 conf_firewall "${FIREWALL_PORTS[@]}"
-copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
-[ "${UPGRADE}" == true ] && start_service "${REPO}"
+get_version "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    start_service "${REPO}"
+else
+    copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
+fi
 enable_service "${REPO}"
 
 
@@ -314,7 +329,10 @@ goto_install_dir
 curl -OL "${DOWNLOAD_LINK}" || log "Failed to download ${REPO}" "ERROR"
 tar xvf "${ARCHIVE_NAME}" || log "Failed to extract ${REPO}" "ERROR"
 cd "${ARCHIVE_NAME%%.tar.gz}" || log "Failed to change directory to ${REPO}" "ERROR"
-[ "${UPGRADE}" == true ] && stop_service "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    get_version "${REPO}"
+    stop_service "${REPO}"
+fi
 copy_binaries /usr/local/bin "${BINARIES[@]}"
 
 log "Setup ${REPO} service"
@@ -340,7 +358,12 @@ EOF
 
 conf_firewall "${FIREWALL_PORTS[@]}"
 copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
-[ "${UPGRADE}" == true ] && start_service "${REPO}"
+get_version "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    start_service "${REPO}"
+else
+    copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
+fi
 enable_service "${REPO}"
 
 #### SNMP EXPORTER
@@ -362,7 +385,10 @@ goto_install_dir
 curl -OL "${DOWNLOAD_LINK}" || log "Failed to download ${REPO}" "ERROR"
 tar xvf "${ARCHIVE_NAME}" || log "Failed to extract ${REPO}" "ERROR"
 cd "${ARCHIVE_NAME%%.tar.gz}" || log "Failed to change directory to ${REPO}" "ERROR"
-[ "${UPGRADE}" == true ] && stop_service "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    get_version "${REPO}"
+    stop_service "${REPO}"
+fi
 copy_binaries /usr/local/bin "${BINARIES[@]}"
 
 log "Setup ${REPO} service"
@@ -385,7 +411,12 @@ EOF
 
 conf_firewall "${FIREWALL_PORTS[@]}"
 copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
-[ "${UPGRADE}" == true ] && start_service "${REPO}"
+get_version "${REPO}"
+if [ "${UPGRADE}" == true ]; then
+    start_service "${REPO}"
+else
+    copy_opt_files "${OPT_FILES[@]}" /etc/prometheus
+fi
 enable_service "${REPO}"
 
 if [ ${POST_INSTALL_SCRIPT_GOOD} == true ]; then
