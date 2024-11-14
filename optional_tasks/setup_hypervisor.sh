@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## Hypervisor Installer 2024110501 for RHEL9
+## Hypervisor Installer 2024111401 for RHEL9
 
 # Requirements:
 # RHEL9 installed with NPF VMv4 profile incl. node exporter
@@ -99,7 +99,7 @@ sed -i '/^view    systemview    included   .1.3.6.1.2.1.25.1.1$/ r /tmp/snmpd_pa
 echo "#### Setting up cockpit & performance logging ####"
 systemctl enable pmcd || log "Failed to enable pmcd" "ERROR"
 systemctl start pmcd || log "Failed to start pmcd" "ERROR"
-systemctl enabgle pmlogger || log "Failed enable pmlogger" "ERROR"
+systemctl enable pmlogger || log "Failed enable pmlogger" "ERROR"
 systemctl start pmlogger || log "Failed start pmlogger" "ERROR"
 systemctl enable cockpit.socket || log "Failed to enable cockpit" "ERROR"
 systemctl start cockpit.socket || log "Failed to start cockpit" "ERROR"
