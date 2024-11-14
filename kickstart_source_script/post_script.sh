@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024102801
+# SCRIPT BUILD 2024111401
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
@@ -139,13 +139,15 @@ check_internet
 if [ $? -eq 0 ]; then
     log "Install available with internet. setting up additional packages."
     dnf install -4 -y epel-release 2>> "${LOG_FILE}" || log "Failed to install epel-release" "ERROR"
-    dnf install -4 -y htop atop nmon iftop iptraf 2>> "${LOG_FILE}" || log "Failed to install additional tools" "ERROR"
+    dnf install -4 -y htop atop nmon iftop iptraf tuned 2>> "${LOG_FILE}" || log "Failed to install additional tools" "ERROR"
 else
     log "No epel available without internet. Didn't install additional packages."
 fi
 
 if [ ${IS_VIRTUAL} != true ]; then
     log "Setting up disk SMART tooling"
+    # Make sure we install smartmontools even if already present
+    dnf install -y smartmontools || log "Failed to install smartmontools" "ERROR"
     echo "DEVICESCAN -H -l error -f -C 197+ -U 198+ -t -l selftest -I 194 -n sleep,7,q -s (S/../.././10|L/../../[5]/13)" >> /etc/smartmontools/smartd.conf 
     systemctl enable smartd 2>> "${LOG_FILE}" || log "Failed to start smartd" "ERROR"
 
@@ -366,6 +368,8 @@ EOF
     log "Setting up iTCO_wdt watchdog"
     echo "iTCO_wdt" > /etc/modules-load.d/10-watchdog.conf
 
+    log "Setting up lm_sensors"
+    dnf install -y lm_sensors || log "Failed to install lm_sensors" "ERROR"
     sensors-detect --auto | grep "no driver for ITE IT8613E" > /dev/null 2>&1
     if [ $? -eq 0 ]; then
         log "Setting up partial ITE 8613E support for NP0F6V2 hardware"
