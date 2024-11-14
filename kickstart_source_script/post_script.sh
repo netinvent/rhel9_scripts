@@ -139,7 +139,7 @@ check_internet
 if [ $? -eq 0 ]; then
     log "Install available with internet. setting up additional packages."
     dnf install -4 -y epel-release 2>> "${LOG_FILE}" || log "Failed to install epel-release" "ERROR"
-    dnf install -4 -y htop atop nmon iftop iptraf tuned 2>> "${LOG_FILE}" || log "Failed to install additional tools" "ERROR"
+    dnf install -4 -y htop atop nmon iftop iptraf tuned tar 2>> "${LOG_FILE}" || log "Failed to install additional tools" "ERROR"
 else
     log "No epel available without internet. Didn't install additional packages."
 fi
