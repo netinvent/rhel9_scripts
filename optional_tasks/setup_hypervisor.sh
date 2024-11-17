@@ -92,7 +92,7 @@ view   systemview    included   .1.3.6.1.4.1.2021.9
 # CPU
 view    systemview    included   .1.3.6.1.4.1.2021.10
 EOF
-[ $? -eq 0 ] || log "Failed to create /tmp/snmpdçpart.conf"
+[ $? -eq 0 ] || log "Failed to create /tmp/snmpd_part.conf" "ERROR"
 
 sed -i '/^view    systemview    included   .1.3.6.1.2.1.25.1.1$/ r /tmp/snmpd_part.conf' /etc/snmp/snmpd.conf 2>> "${LOG_FILE}" || log "Configuring SNMP failed" "ERROR"
 
