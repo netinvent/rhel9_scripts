@@ -6,7 +6,7 @@ __intname__ = "kickstart.partition_script.RHEL9"
 __author__ = "Orsiris de Jong"
 __copyright__ = "Copyright (C) 2022-2024 Orsiris de Jong - NetInvent SASU"
 __licence__ = "BSD 3-Clause"
-__build__ = "2024102801"
+__build__ = "2024111701"
 
 ### This is a pre-script for kickstart files in RHEL 9
 ### Allows specific partition schemes with one or more data partitions
@@ -797,10 +797,11 @@ else:
     sys.exit(222)
 logger.info(f"Running script for target: {TARGET}")
 
-
-IS_VIRTUAL, _ = dirty_cmd_runner(
-    r'dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|netperfect_vm"'
-)
+IS_VIRTUAL, _ = dirty_cmd_runner("lsmod | grep virtio > /dev/null 2>&1")
+if not IS_VIRTUAL:
+    IS_VIRTUAL, _ = dirty_cmd_runner(
+        r'dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|Manufacturer: Red Hat\|NetPerfect\|netperfect_vm"'
+    )
 IS_GPT = is_gpt_system()
 
 if not DISK_PATH:

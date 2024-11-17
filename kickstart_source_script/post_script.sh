@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024111401
+# SCRIPT BUILD 2024111701
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
@@ -27,20 +27,27 @@ log "Starting NPF post install at $(date)"
 # VME (Virtual mode extension)
 # Enhanced Virtualization
 
-# Hence we need to detect specific products
-if ! type -p dmidecode > /dev/null 2>&1; then
-    log "dmidecode not found, trying to install it"
-    dnf install -y dmidecode
-fi
-if ! type -p dmidecode > /dev/null 2>&1; then
-    log "Cannot find dmidecode, let's assume this is a physical machine" "ERROR"
-    IS_VIRTUAL=false
+lsmod | grep virtio > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    IS_VIRTUAL=true
 else
-    dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|netperfect_vm" > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        IS_VIRTUAL=true
-    else
+
+    # Hence we need to detect specific products
+    if ! type -p dmidecode > /dev/null 2>&1; then
+        log "dmidecode not found, trying to install it"
+        dnf install -y dmidecode
+    fi
+    if ! type -p dmidecode > /dev/null 2>&1; then
+        log "Cannot find dmidecode, let's assume this is a physical machine" "ERROR"
         IS_VIRTUAL=false
+    else
+        # Special diag for kvm machines
+        dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|Manufacturer: Red Hat\|NetPerfect\|netperfect_vm" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            IS_VIRTUAL=true
+        else
+            IS_VIRTUAL=false
+        fi
     fi
 fi
 
