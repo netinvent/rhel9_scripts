@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# RHEL / AlmaLinux / RockyLinux / CentOS configuration script from NetPerfect
+# Works with EL9 and EL8
+
 SCRIPT_BUILD="2024111701"
 
 LOG_FILE=/root/.npf-postinstall.log
@@ -20,6 +23,11 @@ function log {
     fi
 }
 
+function log_quit {
+    log "${1}" "${2}"
+    exit 1
+}
+
 log "Starting NPF post install build ${SCRIPT_BUILD} at $(date)"
 
 # This is a duplicate from the Python script, but since we don't inherit pre settings, we need to redeclare it
@@ -27,32 +35,57 @@ log "Starting NPF post install build ${SCRIPT_BUILD} at $(date)"
 # VME (Virtual mode extension)
 # Enhanced Virtualization
 
-lsmod | grep virtio > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    IS_VIRTUAL=true
-    log "Detected this machine as virtual using virtio drivers"
-else
-
-    # Hence we need to detect specific products
-    if ! type -p dmidecode > /dev/null 2>&1; then
-        log "dmidecode not found, trying to install it"
-        dnf install -y dmidecode
-    fi
-    if ! type -p dmidecode > /dev/null 2>&1; then
-        log "Cannot find dmidecode, let's assume this is a physical machine" "ERROR"
-        IS_VIRTUAL=false
+function is_virtual {
+    lsmod | grep virtio > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        IS_VIRTUAL=true
+        log "Detected this machine as virtual using virtio drivers"
     else
-        # Special diag for kvm machines
-        dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|Manufacturer: Red Hat\|NetPerfect\|netperfect_vm" > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            IS_VIRTUAL=true
-            log "Detected this machine as virtual using hypervisor search"
-        else
+
+        # Hence we need to detect specific products
+        if ! type -p dmidecode > /dev/null 2>&1; then
+            log "dmidecode not found, trying to install it"
+            dnf install -y dmidecode
+        fi
+        if ! type -p dmidecode > /dev/null 2>&1; then
+            log "Cannot find dmidecode, let's assume this is a physical machine" "ERROR"
             IS_VIRTUAL=false
-            log "Detected this machine as physical"
+        else
+            # Special diag for kvm machines
+            dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|Manufacturer: Red Hat\|NetPerfect\|netperfect_vm" > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                IS_VIRTUAL=true
+                log "Detected this machine as virtual using hypervisor search"
+            else
+                IS_VIRTUAL=false
+                log "Detected this machine as physical"
+            fi
         fi
     fi
-fi
+}
+
+function get_el_version {
+    if [ -f /etc/os-release ]; then
+        if grep 'ID_LIKE="*rhel*' /etc/os-release > /dev/null; then
+            if grep -e 'PLATFORM_ID=".*el9' /etc/os-release > /dev/null; then
+                RELEASE=9
+            elif grep -e 'PLATFORM_ID=".*el8' /etc/os-release > /dev/null; then
+                RELEASE=8
+            else
+                log_quit "RHEL Like release not compatible"
+            fi
+            DIST=$(awk '{ if ($1~/^NAME=/) { sub("NAME=","", $1); gsub("\"", "", $1); print tolower($1) }}' /etc/os-release)
+            if [ ${RELEASE} -eq 8 ] || [ ${RELEASE} -eq 9 ]; then
+                log "Found Linux ${DIST} release ${RELEASE}"
+            else
+                log_quit "Not compatible with ${DIST} release ${RELEASE}"
+            fi
+
+        fi
+    else
+        log_quit "No /etc/os-release file found"
+    fi
+}
 
 
 # We need a dns hostname in order to validate that we got internet before using internet related functions
@@ -95,6 +128,9 @@ function check_internet {
     return 1
 }
 
+get_el_version
+is_virtual
+
 # NPF-MOD
 if [ ${IS_VIRTUAL} == true ]; then
     NPF_NAME=VMv4.5
@@ -117,23 +153,23 @@ if [ $? -eq 0 ]; then
     # Let's reinstall openscap in case we're running this script on a non prepared machine
     dnf install -y openscap scap-security-guide || log "OpenSCAP is missing and cannot be installed" "ERROR"
     log "Setting up scap profile with remote resources"
-    oscap xccdf eval --profile anssi_bp28_high --fetch-remote-resources --remediate /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > /root/openscap_report/actions.log 2>&1
+    oscap xccdf eval --profile anssi_bp28_high --fetch-remote-resources --remediate /usr/share/xml/scap/ssg/content/ssg-${DIST}${RELEASE}-ds.xml > /root/openscap_report/actions.log 2>&1
     # result 2 is partially applied, which can be normal
     if [ $? -eq 1 ]; then
         log "OpenSCAP failed. See /root/openscap_report/actions.log" "ERROR"
     else
         log "Generating scap results with remote resources"
-        oscap xccdf generate guide --fetch-remote-resources --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2>> "${LOG_FILE}"
+        oscap xccdf generate guide --fetch-remote-resources --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-${DIST}${RELEASE}-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2>> "${LOG_FILE}"
         [ $? -ne 0 ] && log "OpenSCAP results failed. See log file" "ERROR"
     fi
 else
     log "Setting up scap profile without internet"
-    oscap xccdf eval --profile anssi_bp28_high --remediate /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > /root/openscap_report/actions.log 2>&1
+    oscap xccdf eval --profile anssi_bp28_high --remediate /usr/share/xml/scap/ssg/content/ssg-${DIST}${RELEASE}-ds.xml > /root/openscap_report/actions.log 2>&1
     if [ $? -eq 1 ]; then
         log "OpenSCAP failed. See /root/openscap_report/actions.log" "ERROR"
     else
         log "Generating scap results without internet"
-        oscap xccdf generate guide --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2>> "${LOG_FILE}"
+        oscap xccdf generate guide --profile anssi_bp28_high /usr/share/xml/scap/ssg/content/ssg-${DIST}${RELEASE}-ds.xml > "/root/openscap_report/oscap_anssi_bp028_high_$(date '+%Y-%m-%d').html" 2>> "${LOG_FILE}"
         [ $? -ne 0 ] && log "OpenSCAP results failed. See log file" "ERROR"
     fi
 fi
