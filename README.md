@@ -1,7 +1,7 @@
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![GitHub Release](https://img.shields.io/github/release/netinvent/rhel9_scripts.svg?label=Latest)](https://github.com/netinvent/rhel9_scripts/releases/latest)
-[![Python linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/pylint.yml)
-[![Bash linter](https://github.com/netinvent/rhel9_scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/netinvent/rhel9_scripts/actions/workflows/shellcheck.yml)
+[![GitHub Release](https://img.shields.io/github/release/netinvent/el_scripts.svg?label=Latest)](https://github.com/netinvent/el_scripts/releases/latest)
+[![Python linter](https://github.com/netinvent/el_scripts/actions/workflows/pylint.yml/badge.svg)](https://github.com/netinvent/el_scripts/actions/workflows/pylint.yml)
+[![Bash linter](https://github.com/netinvent/el_scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/netinvent/el_scripts/actions/workflows/shellcheck.yml)
 
 
 ## Redhat Enterprise Linux / AlmaLinux / RockyLinux anaconda scipts
