@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# SCRIPT BUILD 2024111701
+SCRIPT_BUILD="2024111701"
 
 LOG_FILE=/root/.npf-postinstall.log
 POST_INSTALL_SCRIPT_GOOD=true
@@ -20,7 +20,7 @@ function log {
     fi
 }
 
-log "Starting NPF post install at $(date)"
+log "Starting NPF post install build ${SCRIPT_BUILD} at $(date)"
 
 # This is a duplicate from the Python script, but since we don't inherit pre settings, we need to redeclare it
 # Physical machine can return
@@ -30,6 +30,7 @@ log "Starting NPF post install at $(date)"
 lsmod | grep virtio > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     IS_VIRTUAL=true
+    log "Detected this machine as virtual using virtio drivers"
 else
 
     # Hence we need to detect specific products
@@ -45,12 +46,13 @@ else
         dmidecode | grep -i "kvm\|qemu\|vmware\|hyper-v\|virtualbox\|innotek\|Manufacturer: Red Hat\|NetPerfect\|netperfect_vm" > /dev/null 2>&1
         if [ $? -eq 0 ]; then
             IS_VIRTUAL=true
+            log "Detected this machine as virtual using hypervisor search"
         else
             IS_VIRTUAL=false
+            log "Detected this machine as physical"
         fi
     fi
 fi
-
 
 
 # We need a dns hostname in order to validate that we got internet before using internet related functions
