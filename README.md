@@ -6,10 +6,14 @@
 
 ## Redhat Enterprise Linux / AlmaLinux / RockyLinux anaconda scipts
 
+This script collection is designed to work on Redhat / AlmaLinux / RockyLinux / CentOS and other EL8 / EL9 clones.  
+
+
 ### Kickstart file
 
-The kickstart file contains a python script which handles automagic partitioning and other small adjustemnts.  
-It will handle MBR, GPT and LVM style partitioning, while being able to autosize partitions.  
+The kickstart file contains a python script which handles automagic partitioning and other small adjustemnts as pre script, and a machine setup script as post script, that will install additions and configure the system.  
+
+With the pre-script, kickstart will handle MBR, GPT and LVM style partitioning, while being able to autosize partitions.  
 
 The python script is to be executed as `%pre --interpreter=/bin/python3` script and will create the following:
 
@@ -25,7 +29,7 @@ Automatic setup of machines with
 
 Of course, you can adjust those values or create new partition schemas directly in the python script.
 
-The kickstat file also provides the following:
+The kickstat post-script section also provides the following:
 
 - Optional packages if physical machine
     - pre-configured smartmontools daemon
@@ -44,7 +48,7 @@ The kickstat file also provides the following:
 - Enable cockpit and allow non root users
 - Cleanup of image after setup
 
-### Technical notes about this script
+#### Technical notes about this script
 
 Instead of relying on anaconda for partitioning, the script will handle partitioning via parted to allow usage of non mounted partitions for readonly-root setups with stateful partitions which should not be mounted via fstab.
 
@@ -52,7 +56,7 @@ The script can also optionally reserve 5% disk space at the end of physical disk
 
 If the installation fails for some reason, the logs will be found in `/tmp/prescript.log`
 
-### Restrictions
+#### Restrictions
 
 Using LVM partitioning is incompatible with stateless partitioning since the latter requires partitions without mountpoints.  
 As of today, the python script only uses a single disk. Multi disk support can be added on request.
@@ -67,13 +71,18 @@ In that case, just reboot and reinstall, since the disk has been emptied, everyt
 
 ## Other scripts
 
+### Machine setup
+
+The machine setup script is the same as the post-script section of the kickstart script, but can be executed on an already running system.  
+It provides the same services as the kickstart script.
+
 ### Setup Hypervisor
 
-Setup KVM environment
+Setup KVM environment including X11 forwarding and bridging.
 
 ### Setup OPNSense
 
-Download and instlal OPNSense firewall and passthrough 2 PCI NICs
+Download and instlal OPNSense firewall and passthrough PCI NICS according to their address.
 
 ### Setup Readonly
 
