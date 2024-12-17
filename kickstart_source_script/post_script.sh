@@ -592,7 +592,7 @@ grub2-mkconfig -o /boot/grub2/grub.cfg 2>> "${LOG_FILE}" || log "grub2-mkconfig 
 
 # Setup automagic terminal resize
 # singequotes on EOF prevents variable expansion
-cat << 'EOF' >> /etc/profile.d/term_resize.sh
+cat << 'EOF' > /etc/profile.d/term_resize.sh
 # Based on solution https://unix.stackexchange.com/a/283206/135459 that replaces xterm-resize package
 
 
@@ -627,7 +627,7 @@ resize_term2() {
 }
 
 # Run only if we're in a serial terminal
-[ $(tty) == /dev/ttyS0 ] && resize_term2
+[ "$(tty)" == /dev/ttyS0 ] && resize_term2
 EOF
 [ $? -ne 0 ] && log "Failed to create /etc/profile.d/term_resize.sh" "ERROR"
 
